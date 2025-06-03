@@ -9,7 +9,7 @@ import { google } from "@ai-sdk/google";
 import { allTools } from "../tools/index.js";
 import { logger } from "../config/logger.js";
 import { env } from "../config/environment.js";
-
+import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 /**
  * Agent instructions that define its personality and capabilities
  */
@@ -76,7 +76,6 @@ const createAIVoltHooks = () => createHooks({
         operationId: context.operationId,
         duration,
         error: error.message,
-        stack: error.stack
       });
     } else {
       logger.info(`[${agent.name}] Operation completed successfully`, {
@@ -120,7 +119,6 @@ const createAIVoltHooks = () => createHooks({
         toolName: tool.name,
         duration: toolDuration,
         error: error.message,
-        stack: error.stack
       });
     } else {
       logger.info(`[${agent.name}] Tool execution completed`, {
@@ -140,8 +138,8 @@ const createAIVoltHooks = () => createHooks({
  */
 const createMemoryStorage = () => {
   return new LibSQLStorage({
-    url: env.DATABASE_URL || "file:./.voltagent/ai-volt-memory.db",
-    authToken: env.DATABASE_AUTH_TOKEN,
+    url: "file:./.voltagent/ai-volt-memory.db", // Always use local SQLite for now
+    // authToken: env.DATABASE_AUTH_TOKEN, // Not needed for local files
     tablePrefix: "ai_volt_memory",
     storageLimit: 1000, // Keep last 1000 messages per conversation
     debug: env.NODE_ENV === "development"
@@ -153,7 +151,7 @@ const createMemoryStorage = () => {
  */
 export const createAIVoltAgent = () => {
   logger.info("Creating AI-Volt agent", {
-    model: "gemini-1.5-flash",
+    model: "gemini-2.5-flash-preview-05-20",
     toolCount: allTools.length,
     environment: env.NODE_ENV
   });
@@ -168,8 +166,9 @@ export const createAIVoltAgent = () => {
     name: "AI-Volt",
     instructions: AGENT_INSTRUCTIONS,
     llm: new VercelAIProvider(),
-    model: google("gemini-1.5-flash"),
-    tools: allTools,
+    model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {google: {thinkingConfig: {thinkingBudget: 2048,},} satisfies GoogleGenerativeAIProviderOptions,},
+    tools: [],
     memory: memoryStorage,
     hooks: hooks,
   });

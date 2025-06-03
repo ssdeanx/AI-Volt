@@ -4,13 +4,58 @@
  * Generated on 2025-06-02
  */
 
-import { Agent, LibSQLStorage, createHooks, type OnStartHookArgs, type OnEndHookArgs, type OnToolStartHookArgs, type OnToolEndHookArgs, type OnHandoffHookArgs } from "@voltagent/core";
+import { Agent, LibSQLStorage, createHooks, type OnStartHookArgs, type OnEndHookArgs, type OnToolStartHookArgs, type OnToolEndHookArgs, type OnHandoffHookArgs, type Tool, createReasoningTools, type Toolkit} from "@voltagent/core";
 import { VercelAIProvider } from "@voltagent/vercel-ai";
 import { google } from "@ai-sdk/google";
+import { generateId } from "ai";
 import { delegateTaskTool } from "../tools/delegateTask.js";
+import { calculatorTool } from "../tools/calculator.js";
+import { dateTimeTool } from "../tools/datetime.js";
+import { systemInfoTool } from "../tools/systemInfo.js";
+import { 
+  gitStatusTool,
+  gitAddTool,
+  gitCommitTool,
+  gitPushTool,
+  gitPullTool,
+  gitBranchTool,
+  gitLogTool,
+  gitDiffTool,
+  gitMergeTool,
+  gitResetTool,
+  gitTool,
+} from "../tools/gitTool.js";
+import {
+  enhancedGitStatusTool,
+  secureGitScriptTool,
+  gitRepositoryAnalysisTool,
+  gitHookValidatorTool,
+  enhancedGitToolkit
+} from "../tools/enhancedGitTool.js";
+import {
+  secureCodeExecutorTool,
+  fileSystemOperationsTool,
+  codeAnalysisTool,
+  projectStructureGeneratorTool,
+  codingToolkit
+} from "../tools/codingTools.js";
+import {
+  secureWebProcessorTool,
+  webScrapingManagerTool,
+  webContentValidatorTool,
+  enhancedWebBrowserToolkit,
+} from "../tools/enhancedWebBrowser.js";
+import { 
+  webSearchTool, 
+  extractTextTool, 
+  extractLinksTool, 
+  extractMetadataTool, 
+  extractTablesTool,
+  extractJsonLdTool,
+} from "../tools/webBrowser.js";
 import { logger } from "../config/logger.js";
 import { env } from "../config/environment.js";
-
+import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 /**
  * Supervisor agent instructions for coordinating worker agents
  */
@@ -26,7 +71,10 @@ DELEGATION STRATEGY:
 - For mathematical calculations or formulas → delegate to "calculator" agent
 - For date/time operations, formatting, scheduling → delegate to "datetime" agent  
 - For system monitoring, performance checks, diagnostics → delegate to "system_info" agent
-- For file operations, reading/writing files → delegate to "file_operations" agent
+- For simple file operations (reading/writing files) → use your own file system tools. For complex file tasks → delegate to "fileops" agent.
+- For Git version control operations → delegate to "git" agent
+- For GitHub specific operations (issues, PRs) → delegate to "github" agent
+- For web searching and browsing → delegate to "browser" agent
 - For general queries that don't need specialization → handle directly or delegate to "general" agent
 
 WORKFLOW COORDINATION:
@@ -56,8 +104,8 @@ When you receive a request, first assess what type of specialized knowledge or t
  */
 const createSupervisorHooks = () => createHooks({
   onStart: async ({ agent, context }: OnStartHookArgs) => {
-    const delegationId = `delegation-${Date.now()}`;
-    const workflowId = `workflow-${Math.random().toString(16).substring(2, 8)}`;
+    const delegationId = `delegation-${generateId()}`;
+    const workflowId = `workflow-${generateId()}`;
     
     context.userContext.set("delegationId", delegationId);
     context.userContext.set("workflowId", workflowId);
@@ -86,16 +134,30 @@ const createSupervisorHooks = () => createHooks({
         operationId: context.operationId,
         duration,
         activeDelegations: Array.from(activeDelegations || []),
-        error: error.message
+        error: error.message,
       });
     } else {
+      const out: any = output;
+      let outputPreview: string | undefined = undefined;
+      if (typeof out === "string") {
+        outputPreview = out.slice(0, 100);
+      } else if (out && typeof out === "object") {
+        if ("text" in out && typeof out.text === "string") {
+          outputPreview = out.text.slice(0, 100);
+        } else {
+          try {
+            outputPreview = JSON.stringify(out).slice(0, 100);
+          } catch {}
+        }
+      }
       logger.info(`[${agent.name}] Coordination session completed`, {
         delegationId,
         workflowId,
         operationId: context.operationId,
         duration,
         totalDelegations: activeDelegations?.size || 0,
-        delegatedTasks: Array.from(activeDelegations || [])
+        delegatedTasks: Array.from(activeDelegations || []),
+        outputPreview
       });
     }
   },
@@ -127,11 +189,11 @@ const createSupervisorHooks = () => createHooks({
           workflowId,
           operationId: context.operationId,
           toolName: tool.name,
-          error: error.message
+          error: error.message,
         });
       } else {
-        // Track successful delegation
-        const taskId = `task-${Date.now()}`;
+        // Track successful delegation using standard ID generation
+        const taskId = `task-${generateId()}`;
         activeDelegations.add(taskId);
         context.userContext.set("activeDelegations", activeDelegations);
         
@@ -147,14 +209,30 @@ const createSupervisorHooks = () => createHooks({
     }
   },
 
-  onHandoff: async ({ agent, sourceAgent }: OnHandoffHookArgs) => {
+  onHandoff: async (args: OnHandoffHookArgs) => {
+    const { agent } = args;
     logger.info(`[${agent.name}] Task handoff received`, {
       targetAgent: agent.name,
-      sourceAgent: sourceAgent.name,
       handoffType: "supervisor-coordination",
       timestamp: new Date().toISOString()
     });
   }
+   
+});
+// Get toolkit, automatically adding instructions & examples to system prompt
+/**
+  * The default reasoning toolkit, which automatically adds instructions and examples
+  * to the system prompt for enhanced reasoning capabilities.
+  */
+const reasoningToolkit: Toolkit = createReasoningTools(); // Uses defaults
+
+/**
+  * A reasoning toolkit configured for "think-only" mode.
+  * This toolkit enables analysis but does not add instructions to the system prompt.
+  */
+const thinkOnlyToolkit: Toolkit = createReasoningTools({
+  analyze: true,
+  addInstructions: false,
 });
 
 /**
@@ -162,8 +240,7 @@ const createSupervisorHooks = () => createHooks({
  */
 const createSupervisorMemory = () => {
   return new LibSQLStorage({
-    url: env.DATABASE_URL || "file:./.voltagent/supervisor-memory.db",
-    authToken: env.DATABASE_AUTH_TOKEN,
+    url: "file:./.voltagent/supervisor-memory.db", // Always use local SQLite for now
     tablePrefix: "supervisor_memory",
     storageLimit: 500, // Keep coordination history
     debug: env.NODE_ENV === "development"
@@ -173,36 +250,77 @@ const createSupervisorMemory = () => {
 /**
  * Create and configure the supervisor agent
  */
-export const createSupervisorAgent = () => {
+export const createSupervisorAgent = async () => {
   logger.info("Creating AI-Volt supervisor agent", {
-    model: "gemini-1.5-flash",
+    model: "gemini-2.5-flash-preview-05-20",
     role: "supervisor",
     environment: env.NODE_ENV
   });
 
-  // Initialize memory storage for coordination history
-  const memoryStorage = createSupervisorMemory();
-  
-  // Create comprehensive hooks for delegation monitoring
-  const hooks = createSupervisorHooks();
+  try {
+    const memoryStorage = createSupervisorMemory();
+    const hooks = createSupervisorHooks();
 
-  const supervisorAgent = new Agent({
-    name: "AI-Volt-Supervisor",
-    instructions: SUPERVISOR_INSTRUCTIONS,
-    llm: new VercelAIProvider(),
-    model: google("gemini-1.5-flash"),
-    tools: [delegateTaskTool],
-    memory: memoryStorage,
-    hooks: hooks,
-  });
-
-  logger.info("AI-Volt supervisor agent created successfully", {
-    memoryProvider: "LibSQLStorage",
-    hooksEnabled: true,
-    totalFeatures: ["delegation", "memory", "hooks", "coordination-monitoring"]
-  });
-  
-  return supervisorAgent;
+    // Create supervisor with delegation tool and comprehensive tool access
+    const supervisorAgent = new Agent({
+      name: "AI-Volt-Supervisor",
+      instructions: SUPERVISOR_INSTRUCTIONS,
+      llm: new VercelAIProvider(),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {google: {thinkingConfig: {thinkingBudget: 512,},} satisfies GoogleGenerativeAIProviderOptions,},
+      tools: [
+        delegateTaskTool,
+        reasoningToolkit, // Add reasoning tools for complex analysis
+        thinkOnlyToolkit, // Add "think-only" toolkit for analysis only
+        // Include basic tools for supervisor to use directly when needed
+        calculatorTool,
+        dateTimeTool,
+        systemInfoTool,
+        // Web tools for direct supervisor use
+        webSearchTool,
+        extractTextTool,
+        extractLinksTool,
+        extractMetadataTool,
+        extractTablesTool,
+        extractJsonLdTool,
+        // Enhanced web browser tools
+        secureWebProcessorTool,
+        webScrapingManagerTool,
+        webContentValidatorTool,
+        // Git tools
+        gitStatusTool,
+        gitAddTool,
+        gitCommitTool,
+        gitPushTool,
+        gitPullTool,
+        gitBranchTool,
+        gitLogTool,
+        gitDiffTool,
+        gitMergeTool,
+        gitResetTool,
+        gitTool,
+        // Enhanced Git tools
+        enhancedGitStatusTool,
+        secureGitScriptTool,
+        gitRepositoryAnalysisTool,
+        gitHookValidatorTool,
+        // Coding tools
+        secureCodeExecutorTool,
+        fileSystemOperationsTool,
+        codeAnalysisTool,
+        projectStructureGeneratorTool,
+      ],
+      subAgents: [],
+      memory: memoryStorage,
+      hooks: hooks,
+    });
+    return supervisorAgent;
+  } catch (error) {
+    logger.error("Failed to create supervisor agent", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 };
 
 /**
@@ -210,8 +328,7 @@ export const createSupervisorAgent = () => {
  */
 const createWorkerMemory = (agentType: string) => {
   return new LibSQLStorage({
-    url: env.DATABASE_URL || `file:./.voltagent/${agentType}-memory.db`,
-    authToken: env.DATABASE_AUTH_TOKEN,
+    url: `file:./.voltagent/${agentType}-memory.db`, // Always use local SQLite for now
     tablePrefix: `${agentType}_memory`,
     storageLimit: 200, // Moderate history for specialized tasks
     debug: env.NODE_ENV === "development"
@@ -223,8 +340,8 @@ const createWorkerMemory = (agentType: string) => {
  */
 const createWorkerHooks = (agentType: string) => createHooks({
   onStart: async ({ agent, context }: OnStartHookArgs) => {
-    const taskId = `${agentType}-task-${Date.now()}`;
-    const sessionId = `${agentType}-${Math.random().toString(16).substring(2, 8)}`;
+    const taskId = `${agentType}-task-${generateId()}`;
+    const sessionId = `${agentType}-${generateId()}`;
     
     context.userContext.set("taskId", taskId);
     context.userContext.set("sessionId", sessionId);
@@ -255,7 +372,6 @@ const createWorkerHooks = (agentType: string) => createHooks({
         operationId: context.operationId,
         duration,
         error: error.message,
-        stack: error.stack
       });
     } else {
       logger.info(`[${agent.name}] Specialized task completed`, {
@@ -304,7 +420,6 @@ const createWorkerHooks = (agentType: string) => createHooks({
         toolName: tool.name,
         duration: toolDuration,
         error: error.message,
-        stack: error.stack
       });
     } else {
       logger.info(`[${agent.name}] Specialized tool execution completed`, {
@@ -322,68 +437,164 @@ const createWorkerHooks = (agentType: string) => createHooks({
 
 /**
  * Create specialized worker agents
+ * @returns Collection of specialized worker agents for different task types
  */
-export const createWorkerAgents = () => {
+export const createWorkerAgents = async () => {
   logger.info("Creating specialized worker agents");
 
-  // Calculator worker agent
-  const calculatorWorker = new Agent({
-    name: "AI-Volt-Calculator",
-    instructions: `You are a specialized calculator agent. Your primary role is to perform mathematical calculations with high precision and provide clear explanations. Always use the calculator tool for any mathematical operations, even simple arithmetic. Provide step-by-step explanations when helpful.`,
-    llm: new VercelAIProvider(),
-    model: google("gemini-1.5-flash"),
-    tools: [], // Will be populated with calculator tools
-    memory: createWorkerMemory("calculator"),
-    hooks: createWorkerHooks("calculator"),
-  });
+  try {
+    // Calculator worker agent
+    const calculatorWorker = new Agent({
+      name: "AI-Volt-Calculator",
+      instructions: `You are a specialized calculator agent. Your primary role is to perform mathematical calculations with high precision and provide clear explanations. Always use the calculator tool for any mathematical operations, even simple arithmetic. Provide step-by-step explanations when helpful.`,
+      llm: new VercelAIProvider(),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
+      tools: [calculatorTool],
+      memory: createWorkerMemory("calculator"),
+      hooks: createWorkerHooks("calculator"),
+    });
 
-  // DateTime worker agent
-  const dateTimeWorker = new Agent({
-    name: "AI-Volt-DateTime", 
-    instructions: `You are a specialized date and time agent. Handle all date/time operations including formatting, calculations, timezone conversions, and scheduling operations. Always use the datetime tool for time-related queries. Provide clear, formatted responses with proper timezone information.`,
-    llm: new VercelAIProvider(),
-    model: google("gemini-1.5-flash"),
-    tools: [], // Will be populated with datetime tools
-    memory: createWorkerMemory("datetime"),
-    hooks: createWorkerHooks("datetime"),
-  });
+    // DateTime worker agent
+    const dateTimeWorker = new Agent({
+      name: "AI-Volt-DateTime", 
+      instructions: `You are a specialized date and time agent. Handle all date/time operations including formatting, calculations, timezone conversions, and scheduling operations. Always use the datetime tool for time-related queries. Provide clear, formatted responses with proper timezone information.`,
+      llm: new VercelAIProvider(),
+      model: google("gemini-2.0-flash"),
+      tools: [dateTimeTool],
+      memory: createWorkerMemory("datetime"),
+      hooks: createWorkerHooks("datetime"),
+    });
 
-  // System Info worker agent
-  const systemInfoWorker = new Agent({
-    name: "AI-Volt-SystemInfo",
-    instructions: `You are a specialized system monitoring agent. Provide comprehensive system information including memory usage, CPU details, network interfaces, and process information. Always use the system_info tool for system queries. Explain metrics clearly and provide context for system health.`,
-    llm: new VercelAIProvider(),
-    model: google("gemini-1.5-flash"),
-    tools: [], // Will be populated with system info tools
-    memory: createWorkerMemory("systeminfo"),
-    hooks: createWorkerHooks("systeminfo"),
-  });
+    // System Info worker agent
+    const systemInfoWorker = new Agent({
+      name: "AI-Volt-SystemInfo",
+      instructions: `You are a specialized system monitoring agent. Provide comprehensive system information including memory usage, CPU details, network interfaces, and process information. Always use the system_info tool for system queries. Explain metrics clearly and provide context for system health.`,
+      llm: new VercelAIProvider(),
+      model: google("gemini-2.0-flash"),
+      tools: [systemInfoTool],
+      memory: createWorkerMemory("systeminfo"),
+      hooks: createWorkerHooks("systeminfo"),
+    });
 
-  // File Operations worker agent
-  const fileOpsWorker = new Agent({
-    name: "AI-Volt-FileOps",
-    instructions: `You are a specialized file operations agent. Handle all file system operations safely and efficiently using MCP file server patterns. Always use the mcp_file_server tool for file operations. Provide clear feedback on operations and ensure data safety.`,
-    llm: new VercelAIProvider(),
-    model: google("gemini-1.5-flash"),
-    tools: [], // Will be populated with file operation tools
-    memory: createWorkerMemory("fileops"),
-    hooks: createWorkerHooks("fileops"),
-  });
+    // File Operations worker agent - uses the coding tools for file operations
+    const fileOpsWorker = new Agent({
+      name: "AI-Volt-FileOps",
+      instructions: `You are a specialized file operations agent. Handle all file system operations safely and efficiently using the available file system tools. Always prioritize data safety and provide clear feedback on operations.`,
+      llm: new VercelAIProvider(),
+      model: google("gemini-2.0-flash"),
+      tools: [fileSystemOperationsTool, secureCodeExecutorTool],
+      memory: createWorkerMemory("fileops"),
+      hooks: createWorkerHooks("fileops"),
+    });
 
-  const workers = {
-    calculator: calculatorWorker,
-    datetime: dateTimeWorker,
-    systemInfo: systemInfoWorker,
-    fileOps: fileOpsWorker
-  };
+    // Git worker agent - uses git tools
+    const gitWorker = new Agent({
+      name: "AI-Volt-Git",
+      instructions: `You are a specialized Git operations agent. Handle all Git-related tasks such as status checks, committing, pushing, pulling, and repository analysis. Use both standard and enhanced Git tools for comprehensive version control operations.`,
+      llm: new VercelAIProvider(),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
+      tools: [
+        gitStatusTool,
+        gitAddTool,
+        gitCommitTool,
+        gitPushTool,
+        gitPullTool,
+        gitBranchTool,
+        gitLogTool,
+        gitDiffTool,
+        gitMergeTool,
+        gitResetTool,
+        gitTool,
+        enhancedGitStatusTool,
+        secureGitScriptTool,
+        gitRepositoryAnalysisTool,
+        gitHookValidatorTool,
+      ],
+      memory: createWorkerMemory("git"),
+      hooks: createWorkerHooks("git"),
+    });
 
-  logger.info("Specialized worker agents created successfully", {
-    workerCount: Object.keys(workers).length,
-    workers: Object.keys(workers),
-    memoryProviders: "LibSQLStorage per agent",
-    hooksEnabled: true,
-    features: ["specialized-tools", "memory", "hooks", "performance-monitoring"]
-  });
+    // Browser worker agent - uses web browser tools
+    const browserWorker = new Agent({
+      name: "AI-Volt-Browser",
+      instructions: `You are a specialized web browsing and search agent. Handle web searches, content extraction, and web scraping tasks using the available web browser tools. Provide comprehensive and accurate web information.`,
+      llm: new VercelAIProvider(),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {google: {thinkingConfig: {thinkingBudget: 256,},} satisfies GoogleGenerativeAIProviderOptions,},
+      tools: [
+        webSearchTool,
+        extractTextTool,
+        extractLinksTool,
+        extractMetadataTool,
+        extractTablesTool,
+        extractJsonLdTool,
+        secureWebProcessorTool,
+        webScrapingManagerTool,
+        webContentValidatorTool,
+      ],
+      memory: createWorkerMemory("browser"),
+      hooks: createWorkerHooks("browser"),
+    });
 
-  return workers;
+    // Coding worker agent - uses coding tools
+    const codingWorker = new Agent({
+      name: "AI-Volt-Coding",
+      instructions: `You are a specialized coding and development agent. Handle code execution, analysis, project structure generation, and file operations. Use secure coding tools and provide comprehensive development assistance.`,
+      llm: new VercelAIProvider(),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {google: {thinkingConfig: {thinkingBudget: 2048,},} satisfies GoogleGenerativeAIProviderOptions,},
+      tools: [
+        secureCodeExecutorTool,
+        fileSystemOperationsTool,
+        codeAnalysisTool,
+        projectStructureGeneratorTool,
+        reasoningToolkit, // Add reasoning tools for complex analysis
+        thinkOnlyToolkit, // Add "think-only" toolkit for analysis only
+        // Include basic coding tools for direct use
+      ],
+      memory: createWorkerMemory("coding"),
+      hooks: createWorkerHooks("coding"),
+    });
+
+    const workers = {
+      calculator: calculatorWorker,
+      datetime: dateTimeWorker,
+      systemInfo: systemInfoWorker,
+      fileOps: fileOpsWorker,
+      git: gitWorker,
+      browser: browserWorker,
+      coding: codingWorker,
+    };
+
+    logger.info("Specialized worker agents created successfully", {
+      workerCount: Object.keys(workers).length,
+      workers: Object.keys(workers),
+      memoryProviders: "LibSQLStorage per agent",
+      hooksEnabled: true,
+      features: ["specialized-tools", "memory", "hooks", "performance-monitoring"]
+    });
+
+    return workers;
+  } catch (error) {
+    logger.error("Failed to create worker agents", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    throw error;
+  }
+};
+
+/**
+ * Helper function for filtering tools by name prefix
+ * @param tools - Array of tools to filter
+ * @param prefix - String or array of prefixes to match
+ * @returns Filtered array of tools
+ */
+const filterToolsByNamePrefix = (tools: Tool[], prefix: string | string[]): Tool[] => {
+  const prefixes = Array.isArray(prefix) ? prefix.map(p => p.toLowerCase()) : [prefix.toLowerCase()];
+  return tools.filter(tool => 
+    prefixes.some(p => tool.name.toLowerCase().startsWith(p))
+  );
 };

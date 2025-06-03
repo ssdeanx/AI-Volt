@@ -16,18 +16,29 @@
     "volt": "volt"
   },
   "dependencies": {
-    "@ai-sdk/google": "^1.2.18",
+    "@ai-sdk/google": "^1.2.19",
+    "@opentelemetry/auto-instrumentations-node": "^0.60.0",
+    "@opentelemetry/sdk-node": "^0.202.0",
     "@voltagent/cli": "^0.1.6",
-    "@voltagent/core": "^0.1.23",
+    "@voltagent/core": "^0.1.25",
     "@voltagent/vercel-ai": "^0.1.9",
-    "zod": "3.25.48"
+    "@voltagent/vercel-ai-exporter": "^0.1.4",
+    "ai": "^4.3.16",
+    "axios": "^1.9.0",
+    "cheerio": "^1.0.0",
+    "crawlee": "^3.13.5",
+    "isolated-vm": "^5.0.4",
+    "shelljs": "^0.10.0",
+    "simple-git": "^3.27.0",
+    "zod": "3.25.49"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",
+    "@types/shelljs": "^0.8.16",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   },
   "overrides": {
-    "zod": "3.25.48"
+    "zod": "3.25.49"
   }
 }

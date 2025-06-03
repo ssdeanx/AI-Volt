@@ -2,12 +2,13 @@
  * AI-Volt - Advanced AI Agent with Supervisor/Worker Architecture
  * Main application entry point with multi-agent coordination
  * 
- * Updated on 2025-06-02
+ * Updated on 2025-06-03
  */
 
-import { VoltAgent } from "@voltagent/core";
+import { VoltAgent, VoltAgentExporter } from "@voltagent/core";
 import { createAIVoltAgent, createSupervisorAgent, createWorkerAgents } from "./agents/index.js";
-import { allTools, toolCategories } from "./tools/index.js";
+// Removed: import { allTools, toolCategories } from "./tools/index.js"; 
+// Assuming toolCategories are no longer needed here as agent creation functions handle tools.
 import { logger } from "./config/logger.js";
 import { env } from "./config/environment.js";
 
@@ -21,21 +22,14 @@ async function startAIVolt(): Promise<void> {
       port: env.PORT,
       logLevel: env.LOG_LEVEL
     });
-
     // Create the main AI-Volt agent (monolithic)
     const aiVoltAgent = createAIVoltAgent();
 
     // Create supervisor agent for coordination
-    const supervisorAgent = createSupervisorAgent();
+    const supervisorAgent = await createSupervisorAgent();
 
-    // Create specialized worker agents
-    const workerAgents = createWorkerAgents();
-
-    // Assign specialized tools to worker agents
-    workerAgents.calculator.tools = toolCategories.math;
-    workerAgents.datetime.tools = [toolCategories.utility[0]]; // dateTimeTool
-    workerAgents.systemInfo.tools = [toolCategories.system[0]]; // systemInfoTool  
-    workerAgents.fileOps.tools = toolCategories.files;
+    // Create specialized worker agents (now async)
+    const workerAgents = await createWorkerAgents();
 
     // Initialize VoltAgent with multi-agent configuration
     const voltAgent = new VoltAgent({
@@ -50,15 +44,28 @@ async function startAIVolt(): Promise<void> {
         "calculator": workerAgents.calculator,
         "datetime": workerAgents.datetime,
         "system-info": workerAgents.systemInfo,
-        "file-ops": workerAgents.fileOps
+        "file-ops": workerAgents.fileOps,
+        "git-ops": workerAgents.git,
+        "browser-ops": workerAgents.browser,
+        "coding-ops": workerAgents.coding
       },
+      telemetryExporter: new VoltAgentExporter({
+        publicKey: env.PK,
+        secretKey: env.SK,
+        baseUrl: "https://api.voltagent.dev",
+      }),
     });
 
+    // Fix: workerAgentKeysForLog is not defined, so use Object.keys(workerAgents)
+    const workerAgentKeysForLog = Object.keys(workerAgents);
+    // Instead of Object.keys(voltAgent.agents), use the keys we passed in
+    const registeredAgentCount = 2 + workerAgentKeysForLog.length; // ai-volt + supervisor + workers
+
     logger.info("✅ AI-Volt multi-agent system started successfully", {
-      agentCount: 6,
+      agentCount: registeredAgentCount, 
       supervisorAgent: "supervisor",
-      workerAgents: Object.keys(workerAgents),
-      totalTools: allTools.length
+      workerAgents: workerAgentKeysForLog,
+      architecture: "Multi-agent with supervisor/worker pattern"
     });
     
     logger.info("🤖 AI-Volt agents are ready to assist!");
@@ -67,18 +74,21 @@ async function startAIVolt(): Promise<void> {
     logger.info("🔧 Available capabilities:", {
       architecture: "Supervisor/Worker Pattern",
       mainAgent: {
-        tools: allTools.length,
-        capabilities: "Full functionality"
+        name: aiVoltAgent.name,
+        capabilities: "Full functionality with all tools"
       },
       supervisorAgent: {
-        role: "Task coordination and delegation",
-        tools: ["delegate_task"]
+        name: supervisorAgent.name,
+        role: "Task coordination and delegation"
       },
       workerAgents: {
-        calculator: "Mathematical operations",
-        datetime: "Date/time processing", 
+        calculator: "Mathematical calculations",
+        datetime: "Date/time operations", 
         systemInfo: "System monitoring",
-        fileOps: "File system operations"
+        fileOps: "File operations",
+        git: "Git version control",
+        browser: "Web browsing and scraping",
+        coding: "Code execution and analysis"
       },
       delegationFeatures: [
         "Intelligent task routing",

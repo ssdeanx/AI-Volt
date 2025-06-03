@@ -11,10 +11,12 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   PORT: z.coerce.number().default(3141),
-  
-  // Database configuration for LibSQL/Turso
+  PK: z.string().min(1, "Public key is required"),
+  SK: z.string().min(1, "Secret key is required"),
+  // Database configuration for LibSQL/Turso (optional - defaults to local SQLite)
   DATABASE_URL: z.string().optional(),
   DATABASE_AUTH_TOKEN: z.string().optional(),
+
 });
 
 // Validate environment variables
