@@ -8,7 +8,6 @@ import { Agent, LibSQLStorage, createHooks, type OnStartHookArgs, type OnEndHook
 import { VercelAIProvider } from "@voltagent/vercel-ai";
 import { google } from "@ai-sdk/google";
 import { generateId } from "ai";
-import { delegateTaskTool } from "../tools/delegateTask.js";
 import { calculatorTool } from "../tools/calculator.js";
 import { dateTimeTool } from "../tools/datetime.js";
 import { systemInfoTool } from "../tools/systemInfo.js";
@@ -56,48 +55,63 @@ import {
 import { logger } from "../config/logger.js";
 import { env } from "../config/environment.js";
 import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
+
 /**
- * Supervisor agent instructions for coordinating worker agents
+ * Supervisor agent instructions for coordinating worker agents using VoltAgent's built-in delegation
  */
 const SUPERVISOR_INSTRUCTIONS = `You are AI-Volt Supervisor, a coordination agent that manages specialized worker agents in a multi-agent system.
 
 CORE ROLE:
 - Analyze user requests and determine the best approach
-- Delegate specialized tasks to appropriate worker agents
+- Delegate specialized tasks to appropriate worker agents using the delegate_task tool
 - Coordinate multi-step workflows across different agent types
 - Provide comprehensive responses by combining results from multiple agents
 
-DELEGATION STRATEGY:
-- For mathematical calculations or formulas → delegate to "calculator" agent
-- For date/time operations, formatting, scheduling → delegate to "datetime" agent  
-- For system monitoring, performance checks, diagnostics → delegate to "system_info" agent
-- For simple file operations (reading/writing files) → use your own file system tools. For complex file tasks → delegate to "fileops" agent.
-- For Git version control operations → delegate to "git" agent
-- For GitHub specific operations (issues, PRs) → delegate to "github" agent
-- For web searching and browsing → delegate to "browser" agent
-- For general queries that don't need specialization → handle directly or delegate to "general" agent
+AVAILABLE WORKER AGENTS & DELEGATION STRATEGY:
+Use the delegate_task tool to assign tasks to these specialized agents:
 
-WORKFLOW COORDINATION:
-1. Analyze the user's request to identify required capabilities
-2. Break down complex requests into smaller, specialized tasks
-3. Use the delegate_task tool to assign tasks to appropriate worker agents
-4. Monitor task completion and compile comprehensive responses
-5. Provide clear, structured feedback to the user
+- "calculator" → Mathematical calculations, formulas, statistical analysis
+- "datetime" → Date/time operations, formatting, scheduling, timezone conversions  
+- "system_info" → System monitoring, performance checks, diagnostics
+- "fileops" → Complex file operations, file management tasks
+- "git" → Git version control operations, repository management
+- "browser" → Web searching, browsing, content extraction, web scraping
+- "coding" → Code execution, analysis, development assistance, project structure
+
+DELEGATION PROTOCOL:
+1. **Request Analysis**: Parse user intent and identify required specialized capabilities
+2. **Task Decomposition**: Break complex requests into agent-specific subtasks
+3. **Strategic Delegation**: Use delegate_task tool with clear task descriptions and target agents
+4. **Progress Coordination**: Monitor task completion and handle multi-agent dependencies
+5. **Response Synthesis**: Compile comprehensive responses from worker agent outputs
+6. **Quality Assurance**: Ensure all aspects of the user request are addressed
+
+DELEGATION SYNTAX:
+When using delegate_task, provide:
+- Clear, specific task description
+- Target agent name (from the list above)
+- Any relevant context or constraints
+- Expected output format if specific requirements exist
 
 COMMUNICATION STYLE:
 - Professional and systematic in approach
 - Clear about which agents are being utilized
-- Transparent about delegation decisions
-- Comprehensive in final responses
-- Proactive in suggesting related capabilities
+- Transparent about delegation decisions and reasoning
+- Comprehensive in final responses with proper attribution
+- Proactive in suggesting related capabilities and optimizations
 
 TASK PRIORITIZATION:
-- Urgent: System issues, critical calculations
-- High: Time-sensitive operations, important file operations
-- Medium: Standard requests, routine calculations
-- Low: Informational queries, background tasks
+- **Urgent**: System issues, critical calculations, security concerns
+- **High**: Time-sensitive operations, important file operations, user-blocking issues
+- **Medium**: Standard requests, routine calculations, general queries
+- **Low**: Informational queries, background tasks, optimization suggestions
 
-When you receive a request, first assess what type of specialized knowledge or tools are needed, then use the delegate_task tool to coordinate with the appropriate worker agents.`;
+DIRECT HANDLING vs DELEGATION:
+- Handle simple queries directly using your basic tools (calculator, datetime, system_info, web_search)
+- Delegate to specialized agents for complex, multi-step, or domain-specific tasks
+- Always delegate when the task requires specialized tools not available to you directly
+
+When you receive a request, first assess the complexity and specialization required, then either handle directly with your basic tools or use the delegate_task tool to coordinate with appropriate worker agents for optimal results.`;
 
 /**
  * Create supervisor-specific hooks for delegation monitoring
@@ -166,8 +180,23 @@ const createSupervisorHooks = () => createHooks({
     const delegationId = context.userContext.get("delegationId");
     const workflowId = context.userContext.get("workflowId");
     
+    // Track delegation attempts specifically
     if (tool.name === "delegate_task") {
+      const delegationCount = context.userContext.get("delegationCount") || 0;
+      context.userContext.set("delegationCount", delegationCount + 1);
+      context.userContext.set("currentDelegation", Date.now());
+      
       logger.info(`[${agent.name}] Task delegation initiated`, {
+        delegationId,
+        workflowId,
+        operationId: context.operationId,
+        toolName: tool.name,
+        delegationSequence: delegationCount + 1,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // Track other tool usage by supervisor
+      logger.debug(`[${agent.name}] Supervisor tool execution started`, {
         delegationId,
         workflowId,
         operationId: context.operationId,
@@ -183,19 +212,39 @@ const createSupervisorHooks = () => createHooks({
     const activeDelegations = context.userContext.get("activeDelegations") as Set<string> || new Set();
 
     if (tool.name === "delegate_task") {
+      const delegationStartTime = context.userContext.get("currentDelegation") as number;
+      const delegationDuration = delegationStartTime ? Date.now() - delegationStartTime : 0;
+      
       if (error) {
         logger.error(`[${agent.name}] Task delegation failed`, {
           delegationId,
           workflowId,
           operationId: context.operationId,
           toolName: tool.name,
+          duration: delegationDuration,
           error: error.message,
         });
       } else {
-        // Track successful delegation using standard ID generation
+        // Track successful delegation
         const taskId = `task-${generateId()}`;
         activeDelegations.add(taskId);
         context.userContext.set("activeDelegations", activeDelegations);
+        
+        // Extract delegation details if possible
+        let delegatedTo: string | undefined;
+        let taskDescription: string | undefined;
+        
+        try {
+          const resultStr = typeof output === "string" ? output : JSON.stringify(output);
+          // Try to extract agent name and task info from output
+          if (resultStr.includes("delegated to") || resultStr.includes("agent")) {
+            delegatedTo = "extracted-from-output";
+          }
+          taskDescription = resultStr.substring(0, 100);
+        } catch {
+          // Safe fallback
+          taskDescription = "delegation-completed";
+        }
         
         logger.info(`[${agent.name}] Task delegation successful`, {
           delegationId,
@@ -203,7 +252,29 @@ const createSupervisorHooks = () => createHooks({
           operationId: context.operationId,
           toolName: tool.name,
           taskId,
-          resultPreview: typeof output === "string" ? output.substring(0, 100) : JSON.stringify(output).substring(0, 100)
+          duration: delegationDuration,
+          delegatedTo,
+          totalActiveDelegations: activeDelegations.size,
+          resultPreview: taskDescription
+        });
+      }
+    } else {
+      // Track other supervisor tool usage
+      if (error) {
+        logger.warn(`[${agent.name}] Supervisor tool failed`, {
+          delegationId,
+          workflowId,
+          operationId: context.operationId,
+          toolName: tool.name,
+          error: error.message,
+        });
+      } else {
+        logger.debug(`[${agent.name}] Supervisor tool completed`, {
+          delegationId,
+          workflowId,
+          operationId: context.operationId,
+          toolName: tool.name,
+          outputPreview: typeof output === "string" ? output.substring(0, 50) : "non-string-output"
         });
       }
     }
@@ -261,59 +332,57 @@ export const createSupervisorAgent = async () => {
     const memoryStorage = createSupervisorMemory();
     const hooks = createSupervisorHooks();
 
-    // Create supervisor with delegation tool and comprehensive tool access
+    // Create worker agents first
+    const workers = await createWorkerAgents();
+
+    // Create supervisor with subAgents - VoltAgent will automatically add delegate_task tool
     const supervisorAgent = new Agent({
       name: "AI-Volt-Supervisor",
       instructions: SUPERVISOR_INSTRUCTIONS,
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {google: {thinkingConfig: {thinkingBudget: 512,},} satisfies GoogleGenerativeAIProviderOptions,},
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 512,
+            includeThoughts: true,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
-        delegateTaskTool,
-        reasoningToolkit, // Add reasoning tools for complex analysis
-        thinkOnlyToolkit, // Add "think-only" toolkit for analysis only
-        // Include basic tools for supervisor to use directly when needed
+        reasoningToolkit, // Reasoning tools for coordination analysis
+        // Only basic tools for supervisor direct use when delegation isn't needed
         calculatorTool,
         dateTimeTool,
         systemInfoTool,
-        // Web tools for direct supervisor use
         webSearchTool,
-        extractTextTool,
-        extractLinksTool,
-        extractMetadataTool,
-        extractTablesTool,
-        extractJsonLdTool,
-        // Enhanced web browser tools
-        secureWebProcessorTool,
-        webScrapingManagerTool,
-        webContentValidatorTool,
-        // Git tools
-        gitStatusTool,
-        gitAddTool,
-        gitCommitTool,
-        gitPushTool,
-        gitPullTool,
-        gitBranchTool,
-        gitLogTool,
-        gitDiffTool,
-        gitMergeTool,
-        gitResetTool,
-        gitTool,
-        // Enhanced Git tools
-        enhancedGitStatusTool,
-        secureGitScriptTool,
-        gitRepositoryAnalysisTool,
-        gitHookValidatorTool,
-        // Coding tools
-        secureCodeExecutorTool,
-        fileSystemOperationsTool,
-        codeAnalysisTool,
-        projectStructureGeneratorTool,
       ],
-      subAgents: [],
+      // CRITICAL FIX: Add subAgents to enable VoltAgent's built-in delegate_task tool
+      subAgents: Object.assign(
+        [
+          workers.calculator,
+          workers.datetime,
+          workers.systemInfo,
+          workers.fileOps,
+          workers.git,
+          workers.browser,
+          workers.coding,
+        ],
+        {
+          calculator: workers.calculator,
+          datetime: workers.datetime, 
+          system_info: workers.systemInfo,
+          fileops: workers.fileOps,
+          git: workers.git,
+          browser: workers.browser,
+          coding: workers.coding,
+        }
+      ),
       memory: memoryStorage,
       hooks: hooks,
     });
+    
     return supervisorAgent;
   } catch (error) {
     logger.error("Failed to create supervisor agent", {

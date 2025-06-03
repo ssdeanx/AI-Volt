@@ -7,7 +7,7 @@
 export { calculatorTool } from "./calculator.js";
 export { dateTimeTool } from "./datetime.js";
 export { systemInfoTool } from "./systemInfo.js";
-export { delegateTaskTool } from "./delegateTask.js";
+
 export { 
   webSearchTool, 
   extractTextTool, 
@@ -58,7 +58,7 @@ export {
 import { calculatorTool } from "./calculator.js";
 import { dateTimeTool } from "./datetime.js";
 import { systemInfoTool } from "./systemInfo.js";
-import { delegateTaskTool } from "./delegateTask.js";
+
 import { 
   webSearchTool, 
   extractTextTool, 
@@ -109,7 +109,6 @@ export const allTools = [
   calculatorTool,
   dateTimeTool,
   systemInfoTool,
-  delegateTaskTool,
   webSearchTool,
   extractTextTool,
   extractLinksTool,
@@ -157,7 +156,6 @@ export const toolCategories = {
   math: [calculatorTool],
   utility: [dateTimeTool, systemInfoTool],
   system: [systemInfoTool],
-  delegation: [delegateTaskTool],
   web: [webSearchTool, extractTextTool, extractLinksTool, extractMetadataTool, extractTablesTool, extractJsonLdTool, secureWebProcessorTool, webScrapingManagerTool, webContentValidatorTool],
   git: [gitStatusTool, gitAddTool, gitCommitTool, gitPushTool, gitPullTool, gitBranchTool, gitLogTool, gitDiffTool, gitMergeTool, gitResetTool, gitTool, enhancedGitStatusTool, secureGitScriptTool, gitRepositoryAnalysisTool, gitHookValidatorTool],
   coding: [secureCodeExecutorTool, fileSystemOperationsTool, codeAnalysisTool, projectStructureGeneratorTool],
