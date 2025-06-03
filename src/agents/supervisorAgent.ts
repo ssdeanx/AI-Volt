@@ -4,7 +4,7 @@
  * Generated on 2025-06-02
  */
 
-import { Agent, LibSQLStorage, createHooks, type OnStartHookArgs, type OnEndHookArgs, type OnToolStartHookArgs, type OnToolEndHookArgs, type OnHandoffHookArgs, type Tool, createReasoningTools, type Toolkit} from "@voltagent/core";
+import { Agent, LibSQLStorage, createHooks, type OnStartHookArgs, type OnEndHookArgs, type OnToolStartHookArgs, type OnToolEndHookArgs, type OnHandoffHookArgs, type Tool, createReasoningTools, type Toolkit, type OperationContext} from "@voltagent/core";
 import { VercelAIProvider } from "@voltagent/vercel-ai";
 import { google } from "@ai-sdk/google";
 import { generateId } from "ai";
@@ -55,6 +55,37 @@ import {
 import { logger } from "../config/logger.js";
 import { env } from "../config/environment.js";
 import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
+import { createSupervisorRetriever, type SupervisorRetriever } from "./supervisorRetriever.js";
+
+/**
+ * Context symbols for type-safe userContext keys
+ * Following VoltAgent best practices for avoiding key collisions
+ */
+const CONTEXT_KEYS = {
+  // Supervisor-level context
+  SESSION_ID: Symbol("aiVoltSessionId"),
+  DELEGATION_ID: Symbol("delegationId"), 
+  WORKFLOW_ID: Symbol("workflowId"),
+  DELEGATION_START: Symbol("delegationStart"),
+  ACTIVE_DELEGATIONS: Symbol("activeDelegations"),
+  DELEGATION_COUNT: Symbol("delegationCount"),
+  CURRENT_DELEGATION: Symbol("currentDelegation"),
+  
+  // Retriever context
+  RETRIEVER_ENABLED: Symbol("retrieverEnabled"),
+  CONTEXT_RETRIEVALS: Symbol("contextRetrievals"),
+  
+  // Worker context
+  TASK_ID: Symbol("taskId"),
+  SESSION_ID_WORKER: Symbol("sessionId"),
+  AGENT_TYPE: Symbol("agentType"),
+  START_TIME: Symbol("startTime"),
+  
+  // Coordination context
+  PARENT_SESSION_ID: Symbol("parentSessionId"),
+  DELEGATION_CHAIN: Symbol("delegationChain"),
+  COORDINATOR_AGENT: Symbol("coordinatorAgent")
+} as const;
 
 /**
  * Supervisor agent instructions for coordinating worker agents using VoltAgent's built-in delegation
@@ -115,39 +146,65 @@ When you receive a request, first assess the complexity and specialization requi
 
 /**
  * Create supervisor-specific hooks for delegation monitoring
+ * Enhanced with VoltAgent userContext best practices
  */
 const createSupervisorHooks = () => createHooks({
   onStart: async ({ agent, context }: OnStartHookArgs) => {
+    // Generate unique identifiers for this coordination session
+    const sessionId = `ai-volt-session-${generateId()}`;
     const delegationId = `delegation-${generateId()}`;
     const workflowId = `workflow-${generateId()}`;
     
-    context.userContext.set("delegationId", delegationId);
-    context.userContext.set("workflowId", workflowId);
-    context.userContext.set("delegationStart", Date.now());
-    context.userContext.set("activeDelegations", new Set());
+    // Initialize context using symbols for type safety
+    context.userContext.set(CONTEXT_KEYS.SESSION_ID, sessionId);
+    context.userContext.set(CONTEXT_KEYS.DELEGATION_ID, delegationId);
+    context.userContext.set(CONTEXT_KEYS.WORKFLOW_ID, workflowId);
+    context.userContext.set(CONTEXT_KEYS.DELEGATION_START, Date.now());
+    context.userContext.set(CONTEXT_KEYS.ACTIVE_DELEGATIONS, new Map<string, {
+      agentType: string;
+      taskId: string;
+      startTime: number;
+      description: string;
+    }>());
+    context.userContext.set(CONTEXT_KEYS.DELEGATION_COUNT, 0);
+    context.userContext.set(CONTEXT_KEYS.COORDINATOR_AGENT, agent.name);
     
-    logger.info(`[${agent.name}] Coordination session started`, {
+    logger.info(`[${agent.name}] AI-Volt coordination session started`, {
+      sessionId,
       delegationId,
       workflowId,
       operationId: context.operationId,
+      coordinator: agent.name,
       timestamp: new Date().toISOString()
     });
   },
 
   onEnd: async ({ agent, output, error, context }: OnEndHookArgs) => {
-    const delegationId = context.userContext.get("delegationId");
-    const workflowId = context.userContext.get("workflowId");
-    const startTime = context.userContext.get("delegationStart") as number;
-    const activeDelegations = context.userContext.get("activeDelegations") as Set<string>;
+    const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
+    const delegationId = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID);
+    const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
+    const startTime = context.userContext.get(CONTEXT_KEYS.DELEGATION_START) as number;
+    const activeDelegations = context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any>;
+    const delegationCount = context.userContext.get(CONTEXT_KEYS.DELEGATION_COUNT) as number;
     const duration = Date.now() - startTime;
 
+    // Cleanup and final reporting
+    const delegationSummary = activeDelegations ? Array.from(activeDelegations.entries()).map(([taskId, info]) => ({
+      taskId,
+      agentType: info.agentType,
+      duration: Date.now() - info.startTime,
+      description: info.description
+    })) : [];
+
     if (error) {
-      logger.error(`[${agent.name}] Coordination session failed`, {
+      logger.error(`[${agent.name}] AI-Volt coordination session failed`, {
+        sessionId,
         delegationId,
         workflowId,
         operationId: context.operationId,
         duration,
-        activeDelegations: Array.from(activeDelegations || []),
+        totalDelegations: delegationCount,
+        activeDelegations: delegationSummary,
         error: error.message,
       });
     } else {
@@ -164,39 +221,47 @@ const createSupervisorHooks = () => createHooks({
           } catch {}
         }
       }
-      logger.info(`[${agent.name}] Coordination session completed`, {
+      logger.info(`[${agent.name}] AI-Volt coordination session completed`, {
+        sessionId,
         delegationId,
         workflowId,
         operationId: context.operationId,
         duration,
-        totalDelegations: activeDelegations?.size || 0,
-        delegatedTasks: Array.from(activeDelegations || []),
+        totalDelegations: delegationCount,
+        successfulDelegations: delegationSummary.length,
+        delegationSummary,
         outputPreview
       });
     }
   },
 
   onToolStart: async ({ agent, tool, context }: OnToolStartHookArgs) => {
-    const delegationId = context.userContext.get("delegationId");
-    const workflowId = context.userContext.get("workflowId");
+    const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
+    const delegationId = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID);
+    const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
     
     // Track delegation attempts specifically
     if (tool.name === "delegate_task") {
-      const delegationCount = context.userContext.get("delegationCount") || 0;
-      context.userContext.set("delegationCount", delegationCount + 1);
-      context.userContext.set("currentDelegation", Date.now());
+      const delegationCount = (context.userContext.get(CONTEXT_KEYS.DELEGATION_COUNT) as number) || 0;
+      const newCount = delegationCount + 1;
+      const delegationStartTime = Date.now();
+      
+      context.userContext.set(CONTEXT_KEYS.DELEGATION_COUNT, newCount);
+      context.userContext.set(CONTEXT_KEYS.CURRENT_DELEGATION, delegationStartTime);
       
       logger.info(`[${agent.name}] Task delegation initiated`, {
+        sessionId,
         delegationId,
         workflowId,
         operationId: context.operationId,
         toolName: tool.name,
-        delegationSequence: delegationCount + 1,
+        delegationSequence: newCount,
         timestamp: new Date().toISOString()
       });
     } else {
       // Track other tool usage by supervisor
       logger.debug(`[${agent.name}] Supervisor tool execution started`, {
+        sessionId,
         delegationId,
         workflowId,
         operationId: context.operationId,
@@ -207,16 +272,18 @@ const createSupervisorHooks = () => createHooks({
   },
 
   onToolEnd: async ({ agent, tool, output, error, context }: OnToolEndHookArgs) => {
-    const delegationId = context.userContext.get("delegationId");
-    const workflowId = context.userContext.get("workflowId");
-    const activeDelegations = context.userContext.get("activeDelegations") as Set<string> || new Set();
+    const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
+    const delegationId = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID);
+    const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
+    const activeDelegations = context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any> || new Map();
 
     if (tool.name === "delegate_task") {
-      const delegationStartTime = context.userContext.get("currentDelegation") as number;
+      const delegationStartTime = context.userContext.get(CONTEXT_KEYS.CURRENT_DELEGATION) as number;
       const delegationDuration = delegationStartTime ? Date.now() - delegationStartTime : 0;
       
       if (error) {
         logger.error(`[${agent.name}] Task delegation failed`, {
+          sessionId,
           delegationId,
           workflowId,
           operationId: context.operationId,
@@ -227,18 +294,21 @@ const createSupervisorHooks = () => createHooks({
       } else {
         // Track successful delegation
         const taskId = `task-${generateId()}`;
-        activeDelegations.add(taskId);
-        context.userContext.set("activeDelegations", activeDelegations);
         
         // Extract delegation details if possible
-        let delegatedTo: string | undefined;
-        let taskDescription: string | undefined;
+        let agentType = "unknown";
+        let taskDescription = "delegation-completed";
         
         try {
           const resultStr = typeof output === "string" ? output : JSON.stringify(output);
-          // Try to extract agent name and task info from output
-          if (resultStr.includes("delegated to") || resultStr.includes("agent")) {
-            delegatedTo = "extracted-from-output";
+          
+          // Try to determine which agent was used
+          const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding'];
+          for (const type of agentTypes) {
+            if (resultStr.toLowerCase().includes(type)) {
+              agentType = type;
+              break;
+            }
           }
           taskDescription = resultStr.substring(0, 100);
         } catch {
@@ -246,14 +316,24 @@ const createSupervisorHooks = () => createHooks({
           taskDescription = "delegation-completed";
         }
         
+        // Add to active delegations map
+        activeDelegations.set(taskId, {
+          agentType,
+          taskId,
+          startTime: delegationStartTime,
+          description: taskDescription
+        });
+        context.userContext.set(CONTEXT_KEYS.ACTIVE_DELEGATIONS, activeDelegations);
+        
         logger.info(`[${agent.name}] Task delegation successful`, {
+          sessionId,
           delegationId,
           workflowId,
           operationId: context.operationId,
           toolName: tool.name,
           taskId,
+          agentType,
           duration: delegationDuration,
-          delegatedTo,
           totalActiveDelegations: activeDelegations.size,
           resultPreview: taskDescription
         });
@@ -262,6 +342,7 @@ const createSupervisorHooks = () => createHooks({
       // Track other supervisor tool usage
       if (error) {
         logger.warn(`[${agent.name}] Supervisor tool failed`, {
+          sessionId,
           delegationId,
           workflowId,
           operationId: context.operationId,
@@ -270,6 +351,7 @@ const createSupervisorHooks = () => createHooks({
         });
       } else {
         logger.debug(`[${agent.name}] Supervisor tool completed`, {
+          sessionId,
           delegationId,
           workflowId,
           operationId: context.operationId,
@@ -281,15 +363,119 @@ const createSupervisorHooks = () => createHooks({
   },
 
   onHandoff: async (args: OnHandoffHookArgs) => {
-    const { agent } = args;
-    logger.info(`[${agent.name}] Task handoff received`, {
-      targetAgent: agent.name,
+    // Note: OnHandoffHookArgs structure may be different from other hook args
+    // For now, just log the handoff event
+    logger.info(`[Supervisor] Task handoff received`, {
       handoffType: "supervisor-coordination",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      args: JSON.stringify(args, null, 2) // Log the actual structure for debugging
     });
   }
    
 });
+
+/**
+ * Create enhanced supervisor hooks that integrate with the retriever
+ */
+const createSupervisorHooksWithRetriever = (baseHooks: ReturnType<typeof createHooks>, retriever: SupervisorRetriever) => {
+  return createHooks({
+    onStart: async ({ agent, context }: OnStartHookArgs) => {
+      // Call base hooks first
+      await baseHooks.onStart?.({ agent, context });
+      
+      // Initialize retriever context tracking
+      context.userContext.set("retrieverEnabled", true);
+      context.userContext.set("contextRetrievals", 0);
+    },
+
+    onEnd: async ({ agent, output, error, context }: OnEndHookArgs) => {
+      // Call base hooks first
+      await baseHooks.onEnd?.({ agent, output, error, context });
+      
+      // Add workflow context to retriever if successful
+      if (!error && output) {
+        const workflowId = context.userContext.get("workflowId") as string;
+        const activeDelegations = context.userContext.get("activeDelegations") as Set<string>;
+        
+        if (workflowId && activeDelegations && activeDelegations.size > 0) {
+          retriever.addWorkflowContext({
+            description: "Multi-agent coordination workflow",
+            steps: Array.from(activeDelegations),
+            workflowId,
+            status: 'completed',
+            agents: Array.from(activeDelegations).map(taskId => taskId.split('-')[0])
+          });
+        }
+      }
+    },
+
+    onToolStart: async ({ agent, tool, context }: OnToolStartHookArgs) => {
+      // Call base hooks first
+      await baseHooks.onToolStart?.({ agent, tool, context });
+    },
+
+    onToolEnd: async ({ agent, tool, output, error, context }: OnToolEndHookArgs) => {
+      // Call base hooks first
+      await baseHooks.onToolEnd?.({ agent, tool, output, error, context });
+      
+      // Track delegation results in retriever
+      if (tool.name === "delegate_task") {
+        const workflowId = context.userContext.get("workflowId") as string;
+        const taskId = context.userContext.get("currentDelegation") as string;
+        
+        try {
+          // Extract delegation details from tool output
+          const resultStr = typeof output === "string" ? output : JSON.stringify(output);
+          const success = !error;
+          
+          // Try to determine which agent was used
+          let agentType = "unknown";
+          const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding'];
+          for (const type of agentTypes) {
+            if (resultStr.toLowerCase().includes(type)) {
+              agentType = type;
+              break;
+            }
+          }
+          
+          retriever.addDelegationContext({
+            agentType,
+            task: "Delegated task via delegate_task tool",
+            result: resultStr.substring(0, 500), // Limit length
+            taskId,
+            workflowId,
+            success,
+            duration: Date.now() - (context.userContext.get("currentDelegation") as number || Date.now())
+          });
+          
+          logger.debug("Delegation result added to retriever", {
+            agentType,
+            success,
+            taskId,
+            workflowId
+          });
+          
+        } catch (retrievalError) {
+          logger.warn("Failed to add delegation context to retriever", {
+            error: retrievalError instanceof Error ? retrievalError.message : String(retrievalError),
+            toolName: tool.name
+          });
+        }
+      }
+    },
+
+    onHandoff: async (args: OnHandoffHookArgs) => {
+      // Call base hooks first
+      await baseHooks.onHandoff?.(args);
+      
+      // Enhanced handoff tracking
+      logger.debug("Enhanced supervisor handoff", {
+        timestamp: new Date().toISOString(),
+        retrieverEnabled: true
+      });
+    }
+  });
+};
 // Get toolkit, automatically adding instructions & examples to system prompt
 /**
   * The default reasoning toolkit, which automatically adds instructions and examples
@@ -332,8 +518,17 @@ export const createSupervisorAgent = async () => {
     const memoryStorage = createSupervisorMemory();
     const hooks = createSupervisorHooks();
 
+    // Create retriever for context management
+    const retriever = createSupervisorRetriever({
+      maxResults: 15,
+      defaultMinScore: 1
+    });
+
     // Create worker agents first
     const workers = await createWorkerAgents();
+
+    // Create enhanced hooks that integrate with retriever
+    const enhancedHooks = createSupervisorHooksWithRetriever(hooks, retriever);
 
     // Create supervisor with subAgents - VoltAgent will automatically add delegate_task tool
     const supervisorAgent = new Agent({
@@ -358,7 +553,7 @@ export const createSupervisorAgent = async () => {
         systemInfoTool,
         webSearchTool,
       ],
-      // CRITICAL FIX: Add subAgents to enable VoltAgent's built-in delegate_task tool
+      // CRITICAL: Add subAgents to enable VoltAgent's built-in delegate_task tool
       subAgents: Object.assign(
         [
           workers.calculator,
@@ -379,8 +574,19 @@ export const createSupervisorAgent = async () => {
           coding: workers.coding,
         }
       ),
+      // Attach retriever directly for automatic context retrieval
+      retriever: retriever,
       memory: memoryStorage,
-      hooks: hooks,
+      hooks: enhancedHooks,
+    });
+    
+    logger.info("Supervisor agent created successfully", {
+      agentName: supervisorAgent.name,
+      subAgentCount: Object.keys(workers).length,
+      retrieverEnabled: true,
+      memoryEnabled: true,
+      hooksEnabled: true,
+      features: ["delegation", "retrieval", "memory", "monitoring"]
     });
     
     return supervisorAgent;
