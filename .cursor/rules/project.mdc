@@ -1,0 +1,57 @@
+---
+description: "Global project conventions for AI-Volt multi-agent application built on VoltAgent: entry-point orchestration, agent factories, hooks, tool registration, prompts, configuration, and logging."
+globs: 
+alwaysApply: true
+---
+---
+description: "Global project conventions for AI-Volt multi-agent application built on VoltAgent: entry-point orchestration, agent factories, hooks, tool registration, prompts, configuration, and logging."
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Project-wide Rules
+
+1. **Entry-point orchestration** (see `index.mdc`): use `startAIVolt()` in `src/index.ts` to assemble agents via factories, initialize `VoltAgent`, log startup, and handle graceful shutdowns.
+2. **Agent factories** (see `agents.mdc`): define each `Agent` in `src/agents` via `new Agent({ … })` with `instructions`, `llm`, `model`, `tools`, `memory`, and `hooks`; supervisor must include `subAgents` and `retriever`.
+3. **Tool creation** (see `tools.mdc`): each tool under `src/tools` must use `createTool({ name, description, parameters: z.object, execute })` and be exported in `src/tools/index.ts` as part of `allTools` or in a toolkit.
+4. **Configuration** (see `config.mdc`): validate all `process.env` variables with Zod schemas in `src/config/environment.ts` and use structured logging in `src/config/logger.ts`, respecting `LOG_LEVEL`.
+5. **Prompt templates** (see `prompts.mdc`): centralize all prompt definitions in `src/prompts/index.ts` using `createPrompt({ template, variables })` and expose via `supervisorPrompts`, `workerPrompts`, and `utilityPrompts`.
+
+---
+# Entry-Point Orchestration Rules
+# Ensures consistent application startup and shutdown handling in src/index.ts
+
+description: "Entry-point orchestration rules: use startAIVolt(), assemble agents via factories, initialize VoltAgent, and handle graceful shutdowns."
+globs:
+  - "src/index.ts"
+alwaysApply: true
+---
+
+1. **Application Startup**:
+   - Call `startAIVolt()` at the end of `src/index.ts` in an `async function`.
+   - Wrap startup in `try/catch`; log initialization details with `logger.info()` (include `NODE_ENV`, `PORT`, `LOG_LEVEL`).
+
+2. **Agent Assembly**:
+   - Invoke `createAIVoltAgent()`, `createSupervisorAgent()`, and `createWorkerAgents()` sequentially.
+   - Pass returned agents into `new VoltAgent({ agents: { ... } })` with keys: `"ai-volt"`, `"supervisor"`, and each worker agent.
+   - Configure `telemetryExporter` via `new VoltAgentExporter` using `env.PK`, `env.SK`, and `baseUrl`.
+
+3. **Logging & Metadata**:
+   - After initialization, compute `registeredAgentCount = 2 + Object.keys(workerAgents).length`.
+   - Log via `logger.info()` including agentCount, supervisorAgent, workerAgents, and architecture details.
+
+4. **Graceful Shutdown**:
+   - Register `SIGINT` and `SIGTERM` handlers to log shutdown via `logger.info()` and call `process.exit(0)`.
+
+5. **Error Handling**:
+   - In startup catch block, use `logger.error()` and `process.exit(1)`.
+   - Attach `.catch()` on `startAIVolt()` to log critical errors before exit.
+
+6. **Module Imports**:
+   - Use ES module syntax with `.js` extensions for local imports.
+   - Always import `env` from `src/config/environment.js` and `logger` from `src/config/logger.js`.
+
+
+
+

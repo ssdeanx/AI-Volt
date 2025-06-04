@@ -1,0 +1,37 @@
+---
+description: 
+globs: src/index.ts
+alwaysApply: false
+---
+---
+description: "Entry-point orchestration rules: use startAIVolt(), assemble agents via factories, initialize VoltAgent, and handle graceful shutdowns."
+globs:
+  - "src/index.ts"
+alwaysApply: true
+---
+
+1. **Application Startup**:
+   - Call `startAIVolt()` at the end of `src/index.ts` in an `async function`.
+   - Wrap startup in try/catch; log initialization details with `logger.info()` (include `NODE_ENV`, `PORT`, `LOG_LEVEL`).
+
+2. **Agent Assembly**:
+   - Invoke `createAIVoltAgent()`, `createSupervisorAgent()`, and `createWorkerAgents()` sequentially.
+   - Pass returned agents into `new VoltAgent({ agents: { ... } })` with keys: `"ai-volt"`, `"supervisor"`, and each worker agent.
+   - Configure `telemetryExporter` via `new VoltAgentExporter` using `env.PK`, `env.SK`, and `baseUrl`.
+
+3. **Logging & Metadata**:
+   - After initialization, compute `registeredAgentCount = 2 + Object.keys(workerAgents).length`.
+   - Log with `logger.info()`, including agentCount, supervisorAgent, workerAgents, and architecture details.
+
+4. **Graceful Shutdown**:
+   - Register `SIGINT` and `SIGTERM` handlers to log shutdown via `logger.info()` and call `process.exit(0)`.
+
+5. **Error Handling**:
+   - In startup catch block, use `logger.error()` and `process.exit(1)`.
+   - Attach `.catch()` on `startAIVolt()` to log critical errors before exit.
+
+6. **Module Imports**:
+   - Use ES module syntax with `.js` extensions for local imports.
+
+
+   - Always import `env` from `src/config/environment.js` and `logger` from `src/config/logger.js`

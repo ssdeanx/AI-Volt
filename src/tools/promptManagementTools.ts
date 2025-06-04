@@ -4,9 +4,9 @@
  * Generated on 2025-01-19
  */
 
-import { createTool, createToolkit } from "@voltagent/core";
+import { createToolkit, ToolSchema } from "@voltagent/core";
 import { z } from "zod";
-import { generateId } from "ai";
+import { generateId, Tool } from "ai";
 import { logger } from "../config/logger.js";
 import { 
   supervisorPrompts, 
@@ -128,6 +128,7 @@ BEST PRACTICES:
 - Implement modular design for maintainable prompt systems`,
   tools: [
     {
+      id: "prompt_security_analysis",
       name: "prompt_security_analysis",
       description: "Analyze prompts for security vulnerabilities including injection detection, jailbreak prevention, and bias analysis",
       parameters: PromptSecurityAnalysisSchema,
@@ -259,8 +260,9 @@ BEST PRACTICES:
             };
           }
         }
-    } as Tool<ToolSchema>,
+    },
     {
+      id: "adaptive_prompt_generation",
       name: "adaptive_prompt_generation",
       description: "Generate adaptive prompts that adjust based on user expertise, context, and task complexity",
       parameters: AdaptivePromptGenerationSchema,
@@ -384,8 +386,9 @@ BEST PRACTICES:
           };
         }
       }
-    } as Tool<ToolSchema>,
+    },
     {
+      id: "iterative_prompt_refinement",
       name: "iterative_prompt_refinement",
       description: "Iteratively refine and optimize prompts based on specified goals and evaluation criteria",
       parameters: IterativePromptRefinementSchema,
@@ -504,8 +507,9 @@ BEST PRACTICES:
           };
         }
       }
-    }),
-    createTool({
+    },
+    {
+      id: "modular_prompt_design",
       name: "modular_prompt_design",
       description: "Design and assemble modular prompts using component-based architecture",
       parameters: ModularPromptDesignSchema,
@@ -546,5 +550,119 @@ BEST PRACTICES:
               content: "Constraints:\n" + promptComponents.constraints.map(c => `- ${c}`).join('\n'),
               priority: 3
             });
+          }
+
+          // Examples
+          if (promptComponents.examples && promptComponents.examples.length > 0) {
+            components.push({
+              type: "examples",
+              content: "Examples:\n" + promptComponents.examples.map(e => `- ${e}`).join('\n'),
+              priority: 4
+            });
+          }
+
+          // Output format
+          if (promptComponents.outputFormat) {
+            components.push({
+              type: "format",
+              content: `Output Format: ${promptComponents.outputFormat}`,
+              priority: 5
+            });
+          }
+
+          // Assembly strategies
+          let assembledPrompt = "";
+          
+          switch (assemblyStrategy) {
+            case "sequential":
+              assembledPrompt = components
+                .sort((a, b) => a.priority - b.priority)
+                .map(c => c.content)
+                .join('\n\n');
+              break;
+              
+            case "prioritized":
+              assembledPrompt = components
+                .sort((a, b) => a.priority - b.priority)
+                .map(c => `[${c.type.toUpperCase()}] ${c.content}`)
+                .join('\n\n');
+              break;
+              
+            case "conditional":
+              assembledPrompt = components
+                .filter(c => c.type === "system" || c.type === "task")
+                .map(c => c.content)
+                .join('\n\n');
+              break;
+              
+            case "adaptive":
+              assembledPrompt = components
+                .map(c => c.content)
+                .join('\n\n');
+              break;
+          }
+
+          // Apply optimization targets
+          if (optimizationTargets) {
+            if (optimizationTargets.includes("brevity")) {
+              assembledPrompt = assembledPrompt.replace(/\s+/g, ' ').trim();
+            }
+            if (optimizationTargets.includes("clarity")) {
+              assembledPrompt = assembledPrompt.replace(/\b(this|that|it)\b/g, '[specific reference]');
+            }
+          }
+
+          const duration = Date.now() - startTime;
+
+          logger.info(`[ModularPrompt] Design completed`, {
+            designId,
+            duration,
+            componentCount: components.length,
+            assemblyStrategy,
+            finalLength: assembledPrompt.length
+          });
+
+          return {
+            success: true,
+            assembledPrompt,
+            components: components.map(c => ({ type: c.type, content: c.content })),
+            assemblyStrategy,
+            optimizationTargets,
+            metadata: { designId, duration }
+          };
+
+        } catch (error) {
+          const duration = Date.now() - startTime;
+          logger.error(`[ModularPrompt] Design failed`, {
+            designId,
+            duration,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          return {
+            success: false,
+            error: `Modular prompt design failed: ${error instanceof Error ? error.message : String(error)}`,
+            metadata: { designId, duration }
+          };
+        }
+      }
+    }
+  ]
+});
 
 export default promptManagementToolkit;
+export {
+  PromptSecurityAnalysisSchema,
+  AdaptivePromptGenerationSchema,
+  IterativePromptRefinementSchema,
+  ModularPromptDesignSchema,
+  promptManagementToolkit,
+  getPrompt,
+  generateSupervisorPrompt,
+  generateWorkerPrompt,
+  supervisorPrompts,
+  workerPrompts,
+  utilityPrompts,
+  SupervisorPromptType,
+  WorkerPromptType,
+  UtilityPromptType
+};

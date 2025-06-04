@@ -1,0 +1,129 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: "Comprehensive onboarding reference: architecture, entry-point, agent factories, tools, configuration, prompts, coding standards, prompt engineering, and Cursor workflows for AI-Volt."
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# 1. Project Purpose & Architecture
+AI-Volt is a Node.js/TypeScript multi-agent orchestration platform built on VoltAgent. It comprises:
+- **AI-Volt Agent**: monolithic orchestrator for user-facing logic.
+- **Supervisor Agent**: coordinates Worker Agents, handles subAgent registration and Retriever.
+- **Worker Agents**: domain-specific assistants (e.g., data analysis, code generation).
+
+Agents communicate via standardized tool-calling and memory hooks.
+
+# 2. Entry-Point (`src/index.ts`)
+```ts
+import { startAIVolt } from './start.js';
+import { env } from './config/environment.js';
+import { logger } from './config/logger.js';
+
+async function main() {
+  logger.info('Starting AI-Volt', { NODE_ENV: env.NODE_ENV });
+  const aiVolt = createAIVoltAgent();
+  const supervisor = createSupervisorAgent();
+  const workers = createWorkerAgents();
+
+  await new VoltAgent({
+    agents: { 'ai-volt': aiVolt, supervisor, ...workers },
+    telemetryExporter: new VoltAgentExporter(env.PK, env.SK, env.TELEMETRY_URL),
+  }).startAIVolt();
+}
+
+main().catch(err => { logger.error(err); process.exit(1); });
+process.on('SIGINT', () => { logger.info('Shutting down'); process.exit(0); });
+```  
+- Use ES imports with `.js` extensions.  
+- Validate `env` via Zod at load time.  
+- Structured logging (timestamp, level, JSON metadata).
+
+# 3. Configuration (`src/config/`)
+- **environment.ts**: Zod schema for all `process.env` variables (PORT, NODE_ENV, PK, SK, TELEMETRY_URL). Export typed `env` object.
+- **logger.ts**: Map `env.LOG_LEVEL` to methods `debug/info/warn/error`. Format: `[timestamp] level message | metadata`.
+
+# 4. Agent Factories (`src/agents/`)
+- Each file exports one `createXAgent()`.
+- Inside: `new Agent({`  
+  `name: 'agent-name',`  
+  `instructions: /* role prompt */,`  
+  `llm: /* LLM client */,`  
+  `model: /* model spec */,`  
+  `tools: [/* tool instances */],`  
+  `memory: new LibSQLStorage(/* table */),`  
+  `hooks: createHooks({ onStart, onToolStart, onEnd, onToolEnd }),`  
+  `...supervisor only: subAgents, retriever`,  
+`});`
+
+# 5. Tool Definitions (`src/tools/`)
+- Each tool file uses:
+```ts
+export const myTool = createTool({
+  name: 'myTool',
+  description: '...',
+  parameters: z.object({ arg1: z.string(), arg2: z.number() }),
+  execute: async ({ args, ctx }) => {
+    // implementation
+  }
+});
+```
+- Index all tools in `src/tools/index.ts` under `export const allTools = [...]`.
+
+# 6. Prompt Template Library (`src/prompts/`)
+- Centralize in `src/prompts/index.ts`:
+```ts
+export const supervisorPrompts = { start: createPrompt({ template: '...', variables: { ... } }) };
+export const workerPrompts = { ... };
+export const utilityPrompts = { ... };
+```
+- TSDoc each prompt: purpose, inputs, expected output schema.
+
+# 7. Code & Documentation Standards
+- **TSDoc** for all public APIs.
+- **ESLint & Prettier**: enforce formatting and lint rules (`npm lint`, `npm format`).
+- File naming: camelCase for modules, PascalCase for React/Agent factories.
+- Keep functions ≤200 lines; break larger logic into utilities.
+
+# 8. Prompt Engineering Guidelines
+- Prompt structure:
+  1. **Role & Objective** (set agent persona).  
+  2. **Instructions** (explicit tasks).  
+  3. **Reasoning Steps** (encourage Chain-of-Thought).  
+  4. **Tool Calls** (if needed).  
+  5. **Output Format** (JSON, markdown, etc.).  
+  6. **Examples** (few-shot for clarity).
+- Advanced techniques: ReAct, Self-Ask, Meta-Prompting, Tree-of-Thought.
+- For GPT-4.1+ agentic flows: include persistence, planning, tool usage [OpenAI GPT-4.1 Guide](mdc:https:/www.linkedin.com/pulse/openais-gpt-41-prompting-guide-explained-kamil-banc-dlzxe).
+- Bracket long contexts with instructions at both start and end.
+
+# 9. Cursor Agent Usage
+- Place this file in `.cursor/rules/onboarding.mdc` so Cursor always loads it.
+- Use **YOLO mode** for automated shell commands (build, test, lint runs).
+- Reference open files via `/Reference Open Editors` in prompts for context.
+- Notepads: store feature specs or code snippets for reuse.
+- Shortcuts:
+  - **Cmd/Ctrl+K**: inline code edits.  
+  - **Cmd/Ctrl+I**: add selected code to prompt context.
+
+# 10. Development Workflow
+1. **Branch**: feature/ descriptive-name.  
+2. **Write tests** first (`vitest`, `npm test`).  
+3. **Implement code**, iterate until passing.  
+4. **Run** `npm build && npm lint` locally.  
+5. **Open PR** with descriptive title and link to issues.  
+6. **Peer review**: adhere to code conventions.  
+7. **Merge**: squash commits; update CHANGELOG.
+
+> Keep this onboarding file as your single source of truth. It ensures you—and the AI model—retain critical project knowledge regardless of chat context.
+
+
+
+
+
+
+

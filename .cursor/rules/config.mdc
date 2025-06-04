@@ -1,0 +1,31 @@
+---
+description: "Configuration rules: validate all environment variables via Zod in src/config/environment.ts and use structured logging in src/config/logger.ts respecting LOG_LEVEL."
+globs: 
+alwaysApply: false
+---
+# Configuration Rules
+# Validates environment and sets up structured logging consistently
+
+description: "Configuration rules: validate all environment variables via Zod in src/config/environment.ts and use structured logging in src/config/logger.ts respecting LOG_LEVEL."
+globs:
+  - "src/config/**/*.ts"
+alwaysApply: true
+---
+
+1. **Environment Validation** (`environment.ts`):
+   - Define a `z.object({...})` schema covering all required and optional `process.env` keys.
+   - Use `.parse(process.env)` at startup to validate values; exit on errors.
+   - Export a typed `env` object for project-wide usage.
+2. **Structured Logger** (`logger.ts`):
+   - Map `env.LOG_LEVEL` to numeric log levels (`debug`, `info`, `warn`, `error`).
+   - Provide methods: `debug()`, `info()`, `warn()`, `error()`.
+   - Format logs with timestamp, level, message, and optional JSON metadata.
+   - Only output messages at or above the configured level.
+3. **New config modules** under `src/config` must:
+   - Integrate with the existing `env` and `logger` exports.
+   - Follow the established pattern for validation and logging.
+
+3. **New config modules** under `src/config` must:
+   - Integrate with the existing `env` and `logger` exports.
+   - Follow the established pattern for validation and logging.
+

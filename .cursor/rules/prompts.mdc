@@ -1,0 +1,39 @@
+---
+description: "Prompt template rules: centralize all prompt definitions in src/prompts/index.ts using createPrompt({ template, variables }) and expose via supervisorPrompts, workerPrompts, and utilityPrompts."
+globs: 
+alwaysApply: false
+---
+---
+# Prompt Template Rules
+# Centralize and structure all AI-Volt prompt templates
+
+description: "Prompt template rules: centralize all prompt definitions in src/prompts/index.ts using createPrompt({ template, variables }) and expose via supervisorPrompts, workerPrompts, and utilityPrompts."
+globs:
+  - "src/prompts/**/*.ts"
+alwaysApply: true
+---
+
+1. **Centralized Definitions**:
+   - Define all prompts in `src/prompts/index.ts` with `createPrompt({ template, variables })`.
+   - Precede each with a JSDoc comment summarizing purpose and variables.
+
+2. **Prompt Collections**:
+   - Group under `supervisorPrompts`, `workerPrompts`, `utilityPrompts`.
+   - Ensure variants exist: standard, RAG, highLoad, debug, and dynamic generators.
+
+3. **Dynamic Generators**:
+   - Implement `generateSupervisorPrompt(availableAgents, capabilities, context)`.
+   - Implement `generateWorkerPrompt(agentType, availableTools, specialization)`.
+
+4. **Type Safety**:
+   - Leverage `SupervisorPromptType`, `WorkerPromptType`, `UtilityPromptType`.
+   - Match `variables` keys exactly to template placeholders.
+
+5. **Modularity & DRY**:
+   - Reuse base templates (e.g. `workerAgentPrompt`) via JS functions for per-agent prompts.
+   - Keep shared text (systemContext, constraints, examples) in variables.
+
+6. **Documentation & Versioning**:
+   - Tag prompt definitions with generation date in comments.
+
+   - Update `CHANGELOG.md` or inline comments whenever prompts change.

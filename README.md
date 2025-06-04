@@ -38,7 +38,7 @@ AI-Volt represents a paradigm shift in AI agent architecture, implementing **age
 ### Prerequisites
 
 - **Node.js** 18+ (LTS recommended)
-- **pnpm** (preferred package manager)
+- **npm** (preferred package manager)
 - **Google AI API** key ([Get yours here](https://ai.google.dev/))
 
 ### Installation
@@ -49,7 +49,7 @@ git clone <repository-url>
 cd AI-Volt
 
 # Install dependencies
-pnpm install
+npm install
 
 # Configure environment
 cp .env.example .env
@@ -70,13 +70,13 @@ LOG_LEVEL=info
 
 ```bash
 # Start development server
-pnpm dev
+npm dev
 
 # Build for production
-pnpm build
+npm build
 
 # Run production build
-pnpm start
+npm start
 ```
 
 ## 🏛️ System Architecture

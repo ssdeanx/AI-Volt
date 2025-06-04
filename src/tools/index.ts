@@ -99,7 +99,7 @@ import {
   webContentValidatorTool,
   enhancedWebBrowserToolkit,
 } from "./enhancedWebBrowser.js";
-
+import { promptManagementToolkit } from "./promptManagementTools.js";
 /**
  * Array of all available individual tools for the AI-Volt agent
  */
@@ -144,6 +144,7 @@ export const allTools = [
 export const allToolkits = [
   enhancedGitToolkit,
   enhancedWebBrowserToolkit,
+  promptManagementToolkit,
 ] as const;
 
 /**

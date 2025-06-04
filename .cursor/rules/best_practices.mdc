@@ -1,0 +1,35 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+1. **NPM Scripts & Dependencies**:
+   - Define common scripts in `package.json`: `build`, `dev`, `start`, `test`, and `lint`.
+   - Use `npm ci` for CI environments to install exact versions from `package-lock.json`.
+   - Distinguish between `dependencies` (runtime) and `devDependencies` (build/test).
+   - Pin major versions and use `overrides` to resolve transitive version conflicts.
+
+2. **TSDoc & Code Documentation**:
+   - Use TSDoc (`/** ... */`) for all exported classes, functions, and types.
+   - Include `@param`, `@returns`, and `@throws` tags where appropriate.
+   - Keep documentation in sync with code changes; generate API docs via TypeDoc.
+
+3. **package.json Maintenance**:
+   - Ensure `name`, `version`, `description`, `author`, `license`, and `keywords` are populated.
+   - Update `version` according to [SemVer](mdc:https:/semver.org) on each release.
+   - Keep scripts section concise; delegate complex tasks to bin scripts or toolkit commands.
+   - Validate `package.json` structure before publish (e.g., via `npm pkg get`).
+
+4. **README.md Conventions**:
+   - Provide a clear project description and core features at the top.
+   - Include badges for license, TypeScript, CI status, and npm version.
+   - Document installation steps, configuration (env vars), scripts, and usage examples.
+   - Use a Mermaid diagram or ASCII art to illustrate architecture.
+   - Maintain a Table of Contents for easy navigation.
+
+5. **Consistency & Style**:
+   - Enforce coding style with ESLint and Prettier; include lint and format scripts.
+   - Use TypeScript's `strict` mode; avoid `any` where possible.
+   - Commit `package-lock.json` to version control; ignore local VSCode or OS files.
+   - Keep README.md in sync with `package.json` `version` and `scripts`.
+

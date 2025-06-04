@@ -1,0 +1,6 @@
+---
+description: "Tool creation rules: each tool under src/tools must use createTool({ name, description, parameters: z.object, execute }) and be exported in src/tools/index.ts."
+globs:
+  - "src/tools/**/*.ts"
+alwaysApply: false
+---

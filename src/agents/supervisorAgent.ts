@@ -53,7 +53,7 @@ import { logger } from "../config/logger.js";
 import { env } from "../config/environment.js";
 import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import { createSupervisorRetriever, type SupervisorRetriever } from "./supervisorRetriever.js";
-
+import { promptManagementToolkit } from "../tools/promptManagementTools.js";
 /**
  * Context symbols for type-safe userContext keys
  * Following VoltAgent best practices for avoiding key collisions
@@ -544,6 +544,7 @@ export const createSupervisorAgent = async () => {
       },
       tools: [
         reasoningToolkit, // Reasoning tools for coordination analysis
+        promptManagementToolkit, // For managing prompts and instructions
         // Only basic tools for supervisor direct use when delegation isn't needed
         calculatorTool,
         dateTimeTool,
@@ -861,6 +862,7 @@ Use the advanced prompt management tools to provide cutting-edge prompt engineer
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 1024,},} satisfies GoogleGenerativeAIProviderOptions,},
       tools: [
+        promptManagementToolkit, // For managing prompts and instructions
         reasoningToolkit, // For complex prompt analysis
         // Include basic tools for supporting analysis
         calculatorTool, // For scoring and metrics

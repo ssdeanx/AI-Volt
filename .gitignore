@@ -5,3 +5,8 @@ dist
 .voltagent
 .voltagent/*db
 
+DarwinGödelMachine.pdf
+Darwin-Gödel-Machine.txt
+
+data
+.vibe-tools.env
