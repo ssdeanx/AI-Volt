@@ -42,8 +42,7 @@ export {
   secureCodeExecutorTool,
   fileSystemOperationsTool,
   codeAnalysisTool,
-  projectStructureGeneratorTool,
-  codingToolkit
+  projectStructureGeneratorTool
 } from "./codingTools.js";
 // Enhanced web browser tools exports
 export {
@@ -93,7 +92,6 @@ import {
   fileSystemOperationsTool,
   codeAnalysisTool,
   projectStructureGeneratorTool,
-  codingToolkit
 } from "./codingTools.js";
 import {
   secureWebProcessorTool,
@@ -145,7 +143,6 @@ export const allTools = [
  */
 export const allToolkits = [
   enhancedGitToolkit,
-  codingToolkit,
   enhancedWebBrowserToolkit,
 ] as const;
 

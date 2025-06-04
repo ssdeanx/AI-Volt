@@ -4,7 +4,7 @@
  * Provides a full suite of Git operations using simple-git.
  * Includes status, commit, push, pull, branch management, and more.
  */
-import { createTool, createToolkit, type Toolkit } from '@voltagent/core';
+import { createTool } from '@voltagent/core';
 import { z } from 'zod';
 import { logger } from '../config/logger.js';
 import { simpleGit, SimpleGit } from 'simple-git';
@@ -174,12 +174,12 @@ const gitBranchTool = createTool({
     try {
       switch (action) {
         case 'list':
-          const branches = await git.branch();
+          { const branches = await git.branch();
           return {
             action,
             branches: branches.all,
             current: branches.current,
-          };
+          }; }
         
         case 'create':
           if (!branchName) throw new Error('Branch name is required for create action');
@@ -192,10 +192,10 @@ const gitBranchTool = createTool({
           return { action, branchName, checkedOut: true };
         
         case 'delete':
-          if (!branchName) throw new Error('Branch name is required for delete action');
+          { if (!branchName) throw new Error('Branch name is required for delete action');
           const deleteOptions = force ? ['-D'] : ['-d'];
           await git.branch([...deleteOptions, branchName]);
-          return { action, branchName, deleted: true, force };
+          return { action, branchName, deleted: true, force }; }
         
         default:
           throw new Error(`Unknown branch action: ${action}`);

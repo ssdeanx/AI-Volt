@@ -4,7 +4,7 @@
  * Performs a real DuckDuckGo search and scrapes the selected result page using Cheerio.
  * @see https://duckduckgo.com/ and https://cheerio.js.org/
  */
-import { createToolkit, createTool, type Toolkit } from "@voltagent/core";
+import { createTool } from "@voltagent/core";
 import { z } from "zod";
 import { logger } from "../config/logger.js";
 import * as cheerio from "cheerio";

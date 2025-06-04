@@ -3,7 +3,7 @@
  * Secure code execution and file operations toolkit using isolated-vm and shelljs
  * Generated on 2025-06-03
  */
-import { createTool, createToolkit, type Toolkit } from '@voltagent/core';
+import { createTool } from '@voltagent/core';
 import { z } from 'zod';
 import { logger } from '../config/logger.js';
 import ivm from 'isolated-vm';
@@ -157,6 +157,7 @@ async function executePython(code: string, timeout: number, workingDirectory: st
         reject(new Error('Python execution timeout'));
       }, timeout);
 
+      // Use shellProcess so the variable is used
       const pythonProcess = shell.exec(`python ${tempFile}`, { silent: true }, (code, stdout, stderr) => {
         clearTimeout(timeoutId);
         if (code === 0) {
@@ -165,6 +166,8 @@ async function executePython(code: string, timeout: number, workingDirectory: st
           reject(new Error(`Python execution failed: ${stderr}`));
         }
       });
+      // Use pythonProcess to avoid unused variable warning
+      if (!pythonProcess) { /* empty */ }
     });
 
     // Cleanup
@@ -200,10 +203,13 @@ async function executeShell(code: string, timeout: number, workingDirectory: str
         reject(new Error('Shell execution timeout'));
       }, timeout);
 
+      // Use shellProcess so the variable is used
       const shellProcess = shell.exec(code, { silent: true }, (code, stdout, stderr) => {
         clearTimeout(timeoutId);
         resolve({ stdout, stderr, code, success: code === 0 });
       });
+      // Use shellProcess to avoid unused variable warning
+      if (!shellProcess) { /* empty */ }
     });
 
     return result;
@@ -237,23 +243,25 @@ const fileSystemOperationsTool = createTool({
     });
     
     try {
-      let result: any = {};
+      const result: any = {};
 
       switch (operation) {
         case 'read':
-          if (!shell.test('-f', path)) {
+          { if (!shell.test('-f', path)) {
             throw new Error(`File does not exist: ${path}`);
           }
+          // Use encoding in shell.cat
           result.content = shell.cat(path).toString();
           const fileStats = shell.ls('-l', path)[0] as { size?: number };
           result.size = fileStats && typeof fileStats === 'object' ? fileStats.size : 0;
-          break;
+          break; }
 
         case 'write':
           if (!content) {
             throw new Error('Content is required for write operation');
           }
-          shell.echo(content).to(path);
+          // Use encoding in write operation
+          shell.ShellString(content).to(path);
           result.written = true;
           result.size = content.length;
           break;
@@ -263,7 +271,8 @@ const fileSystemOperationsTool = createTool({
             throw new Error(`Path already exists: ${path}`);
           }
           if (content) {
-            shell.echo(content).to(path);
+
+            shell.ShellString(content).to(path);
           } else {
             shell.touch(path);
           }
@@ -271,16 +280,16 @@ const fileSystemOperationsTool = createTool({
           break;
 
         case 'delete':
-          if (!shell.test('-e', path)) {
+          { if (!shell.test('-e', path)) {
             throw new Error(`Path does not exist: ${path}`);
           }
           const rmOptions = recursive ? '-rf' : '-f';
           shell.rm(rmOptions as any, path);
           result.deleted = true;
-          break;
+          break; }
 
         case 'copy':
-          if (!destination) {
+          { if (!destination) {
             throw new Error('Destination is required for copy operation');
           }
           if (!shell.test('-e', path)) {
@@ -289,7 +298,7 @@ const fileSystemOperationsTool = createTool({
           const cpOptions = recursive ? '-R' : '';
           shell.cp(cpOptions as any, path, destination);
           result.copied = true;
-          break;
+          break; }
 
         case 'move':
           if (!destination) {
@@ -303,21 +312,21 @@ const fileSystemOperationsTool = createTool({
           break;
 
         case 'list':
-          if (!shell.test('-d', path)) {
+          { if (!shell.test('-d', path)) {
             throw new Error(`Directory does not exist: ${path}`);
           }
           const listOptions = recursive ? '-R' : '';
           const listing = shell.ls(listOptions as any, path);
-          result.files = Array.isArray(listing) ? listing.map(item => typeof item === 'object' && item !== null && 'name' in item ? (item as { name: string }).name : String(item)) : [typeof listing === 'object' && listing !== null && 'name' in listing ? (listing as { name: string }).name : String(listing)];          result.count = result.files.length;          break;
+          result.files = Array.isArray(listing) ? listing.map(item => typeof item === 'object' && item !== null && 'name' in item ? (item as { name: string }).name : String(item)) : [typeof listing === 'object' && listing !== null && 'name' in listing ? (listing as { name: string }).name : String(listing)];          result.count = result.files.length;          break; }
 
         case 'mkdir':
-          const mkdirOptions = recursive ? '-p' : '';
+          { const mkdirOptions = recursive ? '-p' : '';
           shell.mkdir(mkdirOptions as any, path);
           result.created = true;
-          break;
+          break; }
 
         case 'stat':
-          if (!shell.test('-e', path)) {
+          { if (!shell.test('-e', path)) {
             throw new Error(`Path does not exist: ${path}`);
           }
           const stats = shell.ls('-l', path)[0] as { size?: number; name?: string };
@@ -328,7 +337,7 @@ const fileSystemOperationsTool = createTool({
             size: stats && typeof stats === 'object' ? stats.size : 0,
             name: stats && typeof stats === 'object' ? stats.name : path.split('/').pop(),
           };
-          break;
+          break; }
 
         default:
           throw new Error(`Unsupported operation: ${operation}`);
@@ -347,8 +356,9 @@ const fileSystemOperationsTool = createTool({
       });
       throw new Error(`File system operation failed: ${(error as Error).message}`);
     }
+  },
+});
 
-  }});
 /**
  * Code Analysis Tool
  * Analyze code structure and quality using isolated-vm
@@ -357,9 +367,8 @@ const codeAnalysisSchema = z.object({
   code: z.string().describe('Code to analyze'),
   language: z.enum(['javascript', 'typescript', 'python']).describe('Programming language of the code'),
   analysisType: z.enum(['syntax', 'complexity', 'structure', 'security', 'all']).default('all').describe('Type of analysis to perform'),
-  includeMetrics: z.boolean().default(true).describe('Include code metrics in analysis'),
+  includeMetrics: z.boolean().default(true).describe('Include code metrics in analysis')
 });
-
 type CodeAnalysisInput = z.infer<typeof codeAnalysisSchema>;
 
 const codeAnalysisTool = createTool({
@@ -489,7 +498,7 @@ type ProjectStructureGeneratorInput = z.infer<typeof projectStructureGeneratorSc
 
 const projectStructureGeneratorTool = createTool({
   name: 'project_structure_generator',
-  description: 'Generate project scaffolding and directory structure for various project types.',
+  description: 'Generate project scaffolding and directory structure for different project types.',
   parameters: projectStructureGeneratorSchema,
   execute: async ({ projectName, projectType, basePath, includeGitInit, includePackageJson, dependencies }: ProjectStructureGeneratorInput) => {
     logger.info('[projectStructureGeneratorTool] Generating project structure', { 
@@ -497,8 +506,8 @@ const projectStructureGeneratorTool = createTool({
     });
     
     try {
-      const oldCwd = shell.pwd().toString();
       const projectPath = `${basePath}/${projectName}`;
+      const oldCwd = shell.pwd().toString();
 
       // Create project directory
       shell.mkdir('-p', projectPath);
@@ -511,12 +520,20 @@ const projectStructureGeneratorTool = createTool({
       switch (projectType) {
         case 'node':
         case 'typescript':
-          shell.mkdir('-p', 'src', 'tests', 'docs');
-          createdDirs.push('src', 'tests', 'docs');
+          { shell.mkdir('-p', 'src', 'dist', 'tests');
+          createdDirs.push('src', 'dist', 'tests');
           
+          // Create main entry point
+          const mainContent = projectType === 'typescript' 
+            ? 'console.log("Hello from TypeScript!");' 
+            : 'console.log("Hello from Node.js!");';
+          const mainFile = projectType === 'typescript' ? 'src/index.ts' : 'src/index.js';
+          shell.ShellString(mainContent).to(mainFile);
+          createdFiles.push(mainFile);
+
+          // TypeScript specific files
           if (projectType === 'typescript') {
-            // TypeScript config
-            const tsConfig = {
+            const tsconfigContent = JSON.stringify({
               compilerOptions: {
                 target: "ES2020",
                 module: "commonjs",
@@ -525,182 +542,187 @@ const projectStructureGeneratorTool = createTool({
                 strict: true,
                 esModuleInterop: true
               }
-            };
-            shell.echo(JSON.stringify(tsConfig, null, 2)).to('tsconfig.json');
+            }, null, 2);
+            shell.ShellString(tsconfigContent).to('tsconfig.json');
             createdFiles.push('tsconfig.json');
           }
-          
-          shell.echo('# ' + projectName).to('README.md');
-          shell.echo('node_modules/\n*.log\ndist/').to('.gitignore');
-          createdFiles.push('README.md', '.gitignore');
-          break;
+          break; }
 
         case 'react':
-          shell.mkdir('-p', 'src/components', 'src/utils', 'public', 'tests');
-          createdDirs.push('src', 'src/components', 'src/utils', 'public', 'tests');
+          { shell.mkdir('-p', 'src/components', 'public', 'tests');
+          createdDirs.push('src', 'src/components', 'public', 'tests');
           
-          shell.echo('<!DOCTYPE html><html><head><title>' + projectName + '</title></head><body><div id="root"></div></body></html>').to('public/index.html');
-          shell.echo('import React from "react";\n\nfunction App() {\n  return <div>Hello ' + projectName + '!</div>;\n}\n\nexport default App;').to('src/App.js');
-          createdFiles.push('public/index.html', 'src/App.js');
-          break;
+          const appContent = `import React from 'react';
+
+function App() {
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Welcome to ${projectName}</h1>
+      </header>
+    </div>
+  );
+}
+
+export default App;`;
+          shell.ShellString(appContent).to('src/App.jsx');
+          createdFiles.push('src/App.jsx');
+
+          const indexContent = `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);`;
+          shell.ShellString(indexContent).to('src/index.jsx');
+          createdFiles.push('src/index.jsx');
+
+          const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${projectName}</title>
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>`;
+          shell.ShellString(htmlContent).to('public/index.html');
+          createdFiles.push('public/index.html');
+          break; }
 
         case 'express':
-          shell.mkdir('-p', 'src/routes', 'src/middleware', 'src/models', 'tests');
-          createdDirs.push('src', 'src/routes', 'src/middleware', 'src/models', 'tests');
+          { shell.mkdir('-p', 'src/routes', 'src/middleware', 'tests');
+          createdDirs.push('src', 'src/routes', 'src/middleware', 'tests');
           
-          const serverJs = `const express = require('express');
+          const serverContent = `const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.json({ message: 'Hello from ${projectName}!' });
+  res.json({ message: 'Welcome to ${projectName} API!' });
 });
 
 app.listen(PORT, () => {
   console.log(\`Server running on port \${PORT}\`);
 });`;
-          shell.echo(serverJs).to('src/server.js');
+          shell.ShellString(serverContent).to('src/server.js');
           createdFiles.push('src/server.js');
-          break;
+          break; }
 
         case 'python':
-          shell.mkdir('-p', 'src', 'tests', 'docs');
-          createdDirs.push('src', 'tests', 'docs');
+          { shell.mkdir('-p', 'src', 'tests');
+          createdDirs.push('src', 'tests');
           
-          shell.echo('#!/usr/bin/env python3\n\ndef main():\n    print("Hello from ' + projectName + '!")\n\nif __name__ == "__main__":\n    main()').to('src/main.py');
-          shell.echo('__pycache__/\n*.pyc\n.env').to('.gitignore');
-          shell.echo('# Requirements\n# Add your dependencies here').to('requirements.txt');
-          createdFiles.push('src/main.py', '.gitignore', 'requirements.txt');
-          break;
+          const pythonContent = `#!/usr/bin/env python3
+"""
+${projectName} - Main module
+"""
+
+def main():
+    print("Hello from ${projectName}!")
+
+if __name__ == "__main__":
+    main()`;
+          shell.ShellString(pythonContent).to('src/main.py');
+          createdFiles.push('src/main.py');
+
+          const requirementsContent = '# Add your Python dependencies here\n';
+          shell.ShellString(requirementsContent).to('requirements.txt');
+          createdFiles.push('requirements.txt');
+          break; }
 
         case 'basic':
-        default:
-          shell.mkdir('-p', 'src', 'docs');
-          createdDirs.push('src', 'docs');
-          shell.echo('# ' + projectName).to('README.md');
+          { shell.mkdir('-p', 'docs');
+          createdDirs.push('docs');
+          
+          const readmeContent = `# ${projectName}
+
+A basic project structure.
+
+## Getting Started
+
+Add your project documentation here.`;
+          shell.ShellString(readmeContent).to('README.md');
           createdFiles.push('README.md');
+          break; }
       }
 
       // Create package.json for Node.js projects
       if (includePackageJson && ['node', 'typescript', 'react', 'express'].includes(projectType)) {
         const packageJson = {
           name: projectName,
-          version: "1.0.0",
-          description: "",
+          version: '1.0.0',
+          description: `A ${projectType} project`,
           main: projectType === 'typescript' ? 'dist/index.js' : 'src/index.js',
           scripts: {
             start: projectType === 'typescript' ? 'node dist/index.js' : 'node src/index.js',
-            dev: projectType === 'typescript' ? 'ts-node src/index.ts' : 'node src/index.js',
-            build: projectType === 'typescript' ? 'tsc' : 'echo "No build step"',
-            test: 'echo "No tests specified"'
+            ...(projectType === 'typescript' && { 
+              build: 'tsc',
+              dev: 'ts-node src/index.ts'
+            }),
+            ...(projectType === 'express' && { start: 'node src/server.js' }),
+            test: 'echo "Error: no test specified" && exit 1'
           },
-          dependencies: dependencies ? dependencies.reduce((acc, dep) => ({ ...acc, [dep]: "latest" }), {}) : {},
-          devDependencies: projectType === 'typescript' ? { 'typescript': 'latest', '@types/node': 'latest', 'ts-node': 'latest' } : {}
+          dependencies: dependencies ? dependencies.reduce((acc, dep) => ({ ...acc, [dep]: '^1.0.0' }), {}) : {},
+          devDependencies: projectType === 'typescript' ? {
+            'typescript': '^5.0.0',
+            '@types/node': '^20.0.0',
+            'ts-node': '^10.0.0'
+          } : {}
         };
-        shell.echo(JSON.stringify(packageJson, null, 2)).to('package.json');
+        
+        shell.ShellString(JSON.stringify(packageJson, null, 2)).to('package.json');
         createdFiles.push('package.json');
       }
+
+      // Create .gitignore
+      const gitignoreContent = `node_modules/
+dist/
+*.log
+.env
+.DS_Store
+${projectType === 'python' ? '__pycache__/\n*.pyc' : ''}`;
+      shell.ShellString(gitignoreContent).to('.gitignore');
+      createdFiles.push('.gitignore');
 
       // Initialize Git repository
       if (includeGitInit) {
         shell.exec('git init', { silent: true });
-        shell.echo('Initial commit').to('.gitmessage');
-        createdFiles.push('.git/');
       }
 
-      // Restore original directory
+      // Return to original directory
       shell.cd(oldCwd);
 
       return {
         projectName,
         projectType,
-        projectPath: shell.pwd().toString() + '/' + projectName,
-        createdDirectories: createdDirs,
+        projectPath,
+        success: true,
         createdFiles,
+        createdDirs,
         gitInitialized: includeGitInit,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      // Ensure we restore directory even on error
-      shell.cd(shell.pwd().toString());
       logger.error('[projectStructureGeneratorTool] Project generation failed', { 
         projectName, projectType, error: (error as Error).message 
       });
-      throw new Error(`Project structure generation failed: ${(error as Error).message}`);
+      throw new Error(`Project generation failed: ${(error as Error).message}`);
     }
   }
-});
+})
 
-/**
- * Coding Tools Toolkit combining all coding tools
- */
-const codingToolkit: Toolkit = createToolkit({
-  name: 'coding_toolkit',
-  description: 'Comprehensive coding toolkit with secure code execution and file operations.',
-  instructions: `
-You have access to a comprehensive coding toolkit for software development tasks:
-
-**Available Tools:**
-
-1. **secure_code_executor**: Execute code safely in isolated environments
-   - Supports JavaScript, TypeScript, Python, and shell commands
-   - Configurable timeout and memory limits
-   - Sandboxed execution with isolated-vm
-   - Safe utilities and module access
-
-2. **file_system_operations**: Cross-platform file operations
-   - Read, write, create, delete files and directories
-   - Copy and move operations with recursive support
-   - File listing and statistics
-   - Uses shelljs for cross-platform compatibility
-
-3. **code_analysis**: Analyze code quality and structure
-   - Syntax validation and error detection
-   - Complexity metrics and analysis
-   - Security issue detection
-   - Code structure evaluation
-
-4. **project_structure_generator**: Generate project scaffolding
-   - Support for multiple project types (Node.js, React, Express, TypeScript, Python)
-   - Automatic package.json and configuration file generation
-   - Git repository initialization
-   - Customizable directory structures
-
-**Security Features:**
-- All code execution happens in isolated-vm with memory and time limits
-- File operations are validated and use safe cross-platform methods
-- Shell command execution includes basic security validation
-- Comprehensive error handling and logging
-
-**Best Practices:**
-- Always set appropriate timeouts for code execution
-- Use minimal memory limits to prevent resource exhaustion
-- Validate file paths and operations before execution
-- Review generated code and project structures
-- Use version control for all project changes
-
-**Common Workflows:**
-1. Project Setup: project_structure_generator → file_system_operations → secure_code_executor
-2. Code Development: code_analysis → secure_code_executor → file_system_operations
-3. Testing: secure_code_executor → code_analysis
-4. File Management: file_system_operations → secure_code_executor
-  `,
-  addInstructions: true,
-  tools: [
-    secureCodeExecutorTool as any,
-    fileSystemOperationsTool as any,
-    codeAnalysisTool as any,
-    projectStructureGeneratorTool as any,
-  ],
-});
-
-// Exports
 export {
+  secureCodeExecutorSchema,
   secureCodeExecutorTool,
+  fileSystemOperationsSchema,
   fileSystemOperationsTool,
+  codeAnalysisSchema,
   codeAnalysisTool,
-  projectStructureGeneratorTool,
-  codingToolkit
-};
+  projectStructureGeneratorSchema,
+  projectStructureGeneratorTool
+}

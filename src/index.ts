@@ -1,3 +1,4 @@
+
 /**
  * AI-Volt - Advanced AI Agent with Supervisor/Worker Architecture
  * Main application entry point with multi-agent coordination
@@ -47,7 +48,8 @@ async function startAIVolt(): Promise<void> {
         "file-ops": workerAgents.fileOps,
         "git-ops": workerAgents.git,
         "browser-ops": workerAgents.browser,
-        "coding-ops": workerAgents.coding
+        "coding-ops": workerAgents.coding,
+        "prompt-manager": workerAgents.promptManager
       },
       telemetryExporter: new VoltAgentExporter({
         publicKey: env.PK,
@@ -88,7 +90,12 @@ async function startAIVolt(): Promise<void> {
         fileOps: "File operations",
         git: "Git version control",
         browser: "Web browsing and scraping",
-        coding: "Code execution and analysis"
+        coding: "Code execution and analysis",
+        promptManager: "Prompt management and optimization"
+      },
+      voltAgent: {
+        id: voltAgent,
+        role: "Multi-agent coordination and management"
       },
       delegationFeatures: [
         "Intelligent task routing",
@@ -109,7 +116,6 @@ async function startAIVolt(): Promise<void> {
     process.exit(1);
   }
 }
-
 /**
  * Handle graceful shutdown
  */

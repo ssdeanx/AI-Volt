@@ -381,7 +381,7 @@ const webContentValidatorTool = createTool({
         const accessibilityIssues: string[] = [];
         
         // Check for missing alt attributes on images
-        $('img:not([alt])').each((_, el) => {
+        $('img:not([alt])').each((_, _el) => {
           accessibilityIssues.push('Image missing alt attribute');
         });
 

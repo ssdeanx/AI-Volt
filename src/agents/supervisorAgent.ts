@@ -29,20 +29,17 @@ import {
   secureGitScriptTool,
   gitRepositoryAnalysisTool,
   gitHookValidatorTool,
-  enhancedGitToolkit
 } from "../tools/enhancedGitTool.js";
 import {
   secureCodeExecutorTool,
   fileSystemOperationsTool,
   codeAnalysisTool,
   projectStructureGeneratorTool,
-  codingToolkit
 } from "../tools/codingTools.js";
 import {
   secureWebProcessorTool,
   webScrapingManagerTool,
   webContentValidatorTool,
-  enhancedWebBrowserToolkit,
 } from "../tools/enhancedWebBrowser.js";
 import { 
   webSearchTool, 
@@ -218,7 +215,7 @@ const createSupervisorHooks = () => createHooks({
         } else {
           try {
             outputPreview = JSON.stringify(out).slice(0, 100);
-          } catch {}
+          } catch { /* empty */ }
         }
       }
       logger.info(`[${agent.name}] AI-Volt coordination session completed`, {
@@ -563,6 +560,7 @@ export const createSupervisorAgent = async () => {
           workers.git,
           workers.browser,
           workers.coding,
+          workers.promptManager,
         ],
         {
           calculator: workers.calculator,
@@ -572,6 +570,7 @@ export const createSupervisorAgent = async () => {
           git: workers.git,
           browser: workers.browser,
           coding: workers.coding,
+          prompt_manager: workers.promptManager,
         }
       ),
       // Attach retriever directly for automatic context retrieval
@@ -833,6 +832,44 @@ export const createWorkerAgents = async () => {
       hooks: createWorkerHooks("coding"),
     });
 
+    // Prompt Management worker agent - NEW 2025 enhancement
+    const promptManagerWorker = new Agent({
+      name: "AI-Volt-PromptManager",
+      instructions: `You are a specialized prompt engineering and management agent implementing 2025 advanced techniques. Your expertise includes prompt optimization, security analysis, adaptive generation, and modular design.
+
+CORE SPECIALIZATIONS:
+- Security-focused prompt analysis with vulnerability detection
+- Adaptive prompt generation using multimodal techniques
+- Iterative prompt refinement with automated optimization
+- Modular prompt design with template-driven architecture
+- Real-time prompt adjustments and performance monitoring
+
+SECURITY PRIORITIES:
+- Analyze prompts for injection vulnerabilities and jailbreak attempts
+- Implement security-first prompt design principles
+- Validate prompt inputs for data leakage risks
+- Apply bias detection and inclusive language guidelines
+
+ADAPTIVE TECHNIQUES:
+- Adjust prompts based on user expertise and context
+- Implement multimodal considerations for rich interactions
+- Optimize for different communication styles and preferences
+- Provide dynamic prompt adjustments for real-time improvement
+
+Use the advanced prompt management tools to provide cutting-edge prompt engineering services with security, adaptability, and performance as core priorities.`,
+      llm: new VercelAIProvider(),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {google: {thinkingConfig: {thinkingBudget: 1024,},} satisfies GoogleGenerativeAIProviderOptions,},
+      tools: [
+        reasoningToolkit, // For complex prompt analysis
+        // Include basic tools for supporting analysis
+        calculatorTool, // For scoring and metrics
+        webSearchTool, // For researching latest techniques
+      ],
+      memory: createWorkerMemory("prompt_manager"),
+      hooks: createWorkerHooks("prompt_manager"),
+    });
+
     const workers = {
       calculator: calculatorWorker,
       datetime: dateTimeWorker,
@@ -841,6 +878,7 @@ export const createWorkerAgents = async () => {
       git: gitWorker,
       browser: browserWorker,
       coding: codingWorker,
+      promptManager: promptManagerWorker,
     };
 
     logger.info("Specialized worker agents created successfully", {
@@ -859,17 +897,4 @@ export const createWorkerAgents = async () => {
     });
     throw error;
   }
-};
-
-/**
- * Helper function for filtering tools by name prefix
- * @param tools - Array of tools to filter
- * @param prefix - String or array of prefixes to match
- * @returns Filtered array of tools
- */
-const filterToolsByNamePrefix = (tools: Tool[], prefix: string | string[]): Tool[] => {
-  const prefixes = Array.isArray(prefix) ? prefix.map(p => p.toLowerCase()) : [prefix.toLowerCase()];
-  return tools.filter(tool => 
-    prefixes.some(p => tool.name.toLowerCase().startsWith(p))
-  );
 };

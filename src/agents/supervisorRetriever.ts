@@ -158,7 +158,7 @@ class SupervisorContextStore {
     return results
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map(({ score, ...context }) => context);
+      .map(({ score: _score, ...context }) => context);
   }
 
   /**
