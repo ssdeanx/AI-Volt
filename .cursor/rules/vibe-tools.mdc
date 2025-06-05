@@ -3,8 +3,16 @@ description: Global Rule. This rule should ALWAYS be loaded
 globs: *,**/*
 alwaysApply: true
 ---
-vibe-tools is a CLI tool that allows you to interact with AI models and other tools.
-vibe-tools is installed on this machine and it is available to you to execute. You're encouraged to use it.
+---
+# vibe-tools is a CLI tool that allows you to interact with AI models and other tools.
+
+description:
+"vibe-tools is a CLI tool that allows you to interact with AI models and other tools.
+vibe-tools is installed on this machine and it is available to you to execute. You're encouraged to use it."
+globs:
+  - "*"
+alwaysApply: true
+---
 
 <vibe-tools Integration>
 # Instructions

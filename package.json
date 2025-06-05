@@ -17,8 +17,10 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^1.2.19",
+    "@octokit/rest": "^22.0.0",
     "@opentelemetry/auto-instrumentations-node": "^0.60.0",
     "@opentelemetry/sdk-node": "^0.202.0",
+    "@pinecone-database/pinecone": "^6.1.0",
     "@supabase/supabase-js": "^2.49.9",
     "@typescript-eslint/typescript-estree": "^8.33.1",
     "@voltagent/cli": "^0.1.6",
@@ -41,6 +43,7 @@
     "lodash": "^4.17.21",
     "papaparse": "^5.5.3",
     "pdf-parse": "^1.1.1",
+    "playwright": "^1.52.0",
     "quick-lru": "^7.0.1",
     "recast": "^0.23.11",
     "shelljs": "^0.10.0",

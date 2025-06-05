@@ -12,7 +12,7 @@ import { createAIVoltAgent, createSupervisorAgent, createWorkerAgents } from "./
 // Assuming toolCategories are no longer needed here as agent creation functions handle tools.
 import { logger } from "./config/logger.js";
 import { env } from "./config/environment.js";
-
+import { factCheckerAgent } from "./agents/subAgents.js";
 /**
  * Initialize and start the AI-Volt application with supervisor/worker pattern
  */
@@ -37,10 +37,10 @@ async function startAIVolt(): Promise<void> {
       agents: {
         // Main agent with all capabilities
         "ai-volt": aiVoltAgent,
-        
+
         // Supervisor for coordinating tasks
         "supervisor": supervisorAgent,
-        
+        "fact-checker": factCheckerAgent,
         // Specialized worker agents
         "calculator": workerAgents.calculator,
         "datetime": workerAgents.datetime,

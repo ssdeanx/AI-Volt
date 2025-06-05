@@ -51,12 +51,46 @@ export {
   webContentValidatorTool,
   enhancedWebBrowserToolkit,
 } from "./enhancedWebBrowser.js";
-
+export {
+  navigationTool,
+  screenshotTool,
+  interactionTools,
+  responseTools,
+  outputTools,
+  visiblePageTools,
+} from "./playwright/index.js";
+// GitHub tools exports
+export {
+  fetchRepoStarsTool,
+  fetchRepoContributorsTool,
+  getFileContentTool,
+  listRepositoryContentsTool,
+  listPullRequestsTool,
+  getPullRequestDetailsTool,
+  createPullRequestTool,
+  mergePullRequestTool,
+  commentOnPullRequestTool,
+  listPullRequestFilesTool,
+  createRepositoryTool,
+  deleteRepositoryTool,
+  listRepositoryHooksTool,
+  createRepositoryHookTool,
+  getUserProfileTool,
+  listOrgMembersTool,
+} from "./githubTool.js";
 
 // Import all tools for array registration
 import { calculatorTool } from "./calculator.js";
 import { dateTimeTool } from "./datetime.js";
 import { systemInfoTool } from "./systemInfo.js";
+import {
+  navigationTool,
+  screenshotTool,
+  interactionTools,
+  responseTools,
+  outputTools,
+  visiblePageTools,
+} from "./playwright/index.js";
 
 import { 
   webSearchTool, 
@@ -100,6 +134,25 @@ import {
   enhancedWebBrowserToolkit,
 } from "./enhancedWebBrowser.js";
 import { promptManagementToolkit } from "./promptManagementTools.js";
+import {
+  fetchRepoStarsTool,
+  fetchRepoContributorsTool,
+  getFileContentTool,
+  listRepositoryContentsTool,
+  listPullRequestsTool,
+  getPullRequestDetailsTool,
+  createPullRequestTool,
+  mergePullRequestTool,
+  commentOnPullRequestTool,
+  listPullRequestFilesTool,
+  createRepositoryTool,
+  deleteRepositoryTool,
+  listRepositoryHooksTool,
+  createRepositoryHookTool,
+  getUserProfileTool,
+  listOrgMembersTool,
+} from "./githubTool.js";
+
 /**
  * Array of all available individual tools for the AI-Volt agent
  */
@@ -136,6 +189,31 @@ export const allTools = [
   secureWebProcessorTool,
   webScrapingManagerTool,
   webContentValidatorTool,
+  // Playwright tools
+  navigationTool,
+  screenshotTool,
+  // Spread individual tools from their respective groups
+  ...Object.values(interactionTools),
+  ...Object.values(responseTools),
+  ...Object.values(outputTools),
+  ...Object.values(visiblePageTools),
+  // GitHub tools
+  fetchRepoStarsTool,
+  fetchRepoContributorsTool,
+  getFileContentTool,
+  listRepositoryContentsTool,
+  listPullRequestsTool,
+  getPullRequestDetailsTool,
+  createPullRequestTool,
+  mergePullRequestTool,
+  commentOnPullRequestTool,
+  listPullRequestFilesTool,
+  createRepositoryTool,
+  deleteRepositoryTool,
+  listRepositoryHooksTool,
+  createRepositoryHookTool,
+  getUserProfileTool,
+  listOrgMembersTool,
 ] as const;
 
 /**

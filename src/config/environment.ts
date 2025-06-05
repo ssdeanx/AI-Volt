@@ -16,6 +16,7 @@ const envSchema = z.object({
   // Database configuration for LibSQL/Turso (optional - defaults to local SQLite)
   DATABASE_URL: z.string().optional(),
   DATABASE_AUTH_TOKEN: z.string().optional(),
+  GITHUB_TOKEN: z.string().min(1, "GitHub API key is required"),
 
 });
 

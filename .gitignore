@@ -10,3 +10,6 @@ Darwin-Gödel-Machine.txt
 
 data
 .vibe-tools.env
+weaviate_data/*
+weaviate_data/
+weaviate_data

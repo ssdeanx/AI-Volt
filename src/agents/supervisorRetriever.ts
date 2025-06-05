@@ -7,6 +7,13 @@
 import { BaseRetriever, type BaseMessage } from "@voltagent/core";
 import { logger } from "../config/logger.js";
 import { generateId } from "ai";
+import QuickLRU from "quick-lru";
+
+/** Allowed agent types for query analysis & indexing */
+const AGENT_TYPES = [
+  'calculator', 'datetime', 'system_info',
+  'fileops', 'git', 'browser', 'coding',
+] as const;
 
 /**
  * Context entry structure for retrieval operations
@@ -30,13 +37,20 @@ interface ContextEntry {
  * Supervisor context store for managing retrieval data
  */
 class SupervisorContextStore {
-  private contexts: Map<string, ContextEntry> = new Map();
+  private contexts: QuickLRU<string, ContextEntry>;
   private indexByType: Map<string, Set<string>> = new Map();
   private indexByAgent: Map<string, Set<string>> = new Map();
   private indexByTags: Map<string, Set<string>> = new Map();
 
+  constructor(maxSize: number = 1000) {
+    this.contexts = new QuickLRU({
+      maxSize,
+      onEviction: (_id, entry) => this.removeFromIndexes(entry),
+    });
+  }
+
   /**
-   * Add context entry to the store
+   * Add context entry to the store.
    */
   addContext(entry: ContextEntry): void {
     this.contexts.set(entry.id, entry);
@@ -62,6 +76,22 @@ class SupervisorContextStore {
           this.indexByTags.set(tag, new Set());
         }
         this.indexByTags.get(tag)!.add(entry.id);
+      }
+    }
+  }
+
+  /**
+   * When QuickLRU evicts an entry, remove it from all indexes.
+   */
+  private removeFromIndexes(entry: ContextEntry): void {
+    const id = entry.id;
+    this.indexByType.get(entry.type)?.delete(id);
+    if (entry.metadata.agentType) {
+      this.indexByAgent.get(entry.metadata.agentType)?.delete(id);
+    }
+    if (entry.metadata.tags) {
+      for (const tag of entry.metadata.tags) {
+        this.indexByTags.get(tag)?.delete(id);
       }
     }
   }
@@ -204,7 +234,7 @@ class SupervisorContextStore {
   }
 
   /**
-   * Clear old contexts to manage memory usage
+   * Clean up old contexts older than maxAge (ms).
    */
   cleanup(maxAge: number = 7 * 24 * 60 * 60 * 1000): number { // 7 days default
     const cutoff = Date.now() - maxAge;
@@ -247,76 +277,120 @@ class SupervisorContextStore {
 }
 
 /**
- * Supervisor Retriever implementation following VoltAgent's BaseRetriever pattern
+ * SupervisorRetriever: in-memory RAG for delegation/workflow context.
+ * Can be attached directly (agent.retriever) or exposed as a tool.
  */
 export class SupervisorRetriever extends BaseRetriever {
   private contextStore: SupervisorContextStore;
+  private searchCache: QuickLRU<string, string>;
   private maxResults: number;
   private defaultMinScore: number;
 
+  /**
+   * @param options.maxResults      Max number of contexts to return.
+   * @param options.defaultMinScore  Minimum relevance score to include.
+   * @param options.toolName        If set, exposes `this.tool` for LLM-driven calls.
+   * @param options.toolDescription Description shown to the LLM for tool usage.
+   * @param options.storeMaxSize    Maximum number of contexts to store.
+   * @param options.searchCacheSize Number of distinct queries to cache.
+   */
   constructor(options: {
     maxResults?: number;
     defaultMinScore?: number;
+    toolName?: string;
+    toolDescription?: string;
+    storeMaxSize?: number;
+    searchCacheSize?: number;
   } = {}) {
-    super();
-    this.contextStore = new SupervisorContextStore();
-    this.maxResults = options.maxResults || 10;
-    this.defaultMinScore = options.defaultMinScore || 1;
+    // Pass toolName/toolDescription to BaseRetriever so you get .tool
+    super({ toolName: options.toolName, toolDescription: options.toolDescription });
+    this.contextStore = new SupervisorContextStore(options.storeMaxSize);
+    this.searchCache = new QuickLRU({ maxSize: options.searchCacheSize ?? 100 });
+    this.maxResults = options.maxResults ?? 10;
+    this.defaultMinScore = options.defaultMinScore ?? 1;
     
     logger.info("SupervisorRetriever initialized", {
       maxResults: this.maxResults,
-      defaultMinScore: this.defaultMinScore
+      defaultMinScore: this.defaultMinScore,
+      storeMaxSize: options.storeMaxSize ?? 1000,
+      searchCacheSize: options.searchCacheSize ?? 100,
     });
   }
 
   /**
-   * Retrieve relevant context based on input
-   * Implementation of BaseRetriever.retrieve method
+   * Retrieve relevant context entries for the given input.
+   * Wrapped in try/catch to ensure graceful fallback.
    */
   async retrieve(input: string | BaseMessage[]): Promise<string> {
+    // Hoist identifiers so they're available in both try and catch
     const retrievalId = generateId();
     const startTime = Date.now();
-    
     try {
-      // Extract query from input
-      const query = Array.isArray(input) 
-        ? input.map(msg => typeof msg === 'string' ? msg : JSON.stringify(msg)).join(' ')
+      const query = Array.isArray(input)
+        ? input.map(m => (typeof m === 'string' ? m : JSON.stringify(m))).join(' ')
         : input;
 
+      // build a cache key from the raw query + search options
+      const opts = this.analyzeQueryForSearchOptions(query);
+      const key = JSON.stringify({ query, opts, maxResults: this.maxResults, minScore: this.defaultMinScore });
+
+      // 1) Try the cache
+      const cached = this.searchCache.get(key);
+      if (cached) {
+        logger.debug("Supervisor retrieval — cache hit", { retrievalId, key });
+        return cached;
+      }
+
+      // 2) Cache miss: do the full search
       logger.debug("Supervisor retrieval started", {
         retrievalId,
         queryLength: query.length,
         inputType: Array.isArray(input) ? 'messages' : 'string'
       });
 
-      // Determine search strategy based on query content
-      const searchOptions = this.analyzeQueryForSearchOptions(query);
-      
-      // Perform context search
-      const relevantContexts = this.contextStore.search(query, {
+      const ctxs = this.contextStore.search(query, {
         limit: this.maxResults,
         minRelevanceScore: this.defaultMinScore,
-        ...searchOptions
+        ...opts,
       });
 
-      // Format results for consumption by the agent
-      const formattedContext = this.formatContextsForAgent(relevantContexts, query);
-      
+      let result: string;
+      if (ctxs.length === 0) {
+        result = `No relevant context found for "${query}".`;
+      } else {
+        // Format grouped by type
+        const sections = ['## Retrieved Context', ''];
+        const byType = new Map<string, typeof ctxs>();
+        for (const c of ctxs) {
+          (byType.get(c.type) ?? byType.set(c.type, []).get(c.type)!).push(c);
+        }
+        for (const [type, entries] of byType) {
+          sections.push(`### ${type.toUpperCase()}`);
+          for (const e of entries) {
+            sections.push(`**${e.source}** - ${new Date(e.metadata.timestamp).toISOString()}`);
+            sections.push(e.content, '');
+          }
+        }
+        result = sections.join('\n');
+      }
+
+      // 3) Store in cache before returning
+      this.searchCache.set(key, result);
+
       const duration = Date.now() - startTime;
       
       logger.info("Supervisor retrieval completed", {
         retrievalId,
         duration,
-        contextsFound: relevantContexts.length,
-        formattedLength: formattedContext.length,
-        searchOptions
+        contextsFound: ctxs.length,
+        formattedLength: result.length,
+        searchOptions: opts
       });
 
-      return formattedContext;
-      
-    } catch (error) {
+      return result;
+    } catch (err) {
       const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = err instanceof Error ? err.message : String(err);
       
       logger.error("Supervisor retrieval failed", {
         retrievalId,
@@ -324,13 +398,12 @@ export class SupervisorRetriever extends BaseRetriever {
         error: errorMessage
       });
       
-      // Return graceful fallback
-      return `Retrieval system temporarily unavailable. Please proceed with available context.`;
+      return `Retrieval error: proceeding without prior context.`;
     }
   }
 
   /**
-   * Add delegation result to context store
+   * Index a delegation result. Errors are caught and logged.
    */
   addDelegationContext(result: {
     agentType: string;
@@ -341,33 +414,39 @@ export class SupervisorRetriever extends BaseRetriever {
     success: boolean;
     duration?: number;
   }): void {
-    const entry: ContextEntry = {
-      id: generateId(),
-      content: `Task: ${result.task}\nResult: ${result.result}`,
-      source: `delegation-${result.agentType}`,
-      type: 'delegation',
-      metadata: {
-        timestamp: Date.now(),
+    try {
+      const entry: ContextEntry = {
+        id: generateId(),
+        content: `Task: ${result.task}\nResult: ${result.result}`,
+        source: `delegation-${result.agentType}`,
+        type: 'delegation',
+        metadata: {
+          timestamp: Date.now(),
+          agentType: result.agentType,
+          taskId: result.taskId,
+          workflowId: result.workflowId,
+          relevanceScore: result.success ? 5 : 2,
+          tags: [
+            result.agentType,
+            result.success ? 'success' : 'failure',
+            ...(result.duration ? [`duration-${Math.round(result.duration / 1000)}s`] : [])
+          ]
+        }
+      };
+      
+      this.contextStore.addContext(entry);
+      
+      logger.debug("Delegation context added", {
+        entryId: entry.id,
         agentType: result.agentType,
-        taskId: result.taskId,
-        workflowId: result.workflowId,
-        relevanceScore: result.success ? 5 : 2,
-        tags: [
-          result.agentType,
-          result.success ? 'success' : 'failure',
-          ...(result.duration ? [`duration-${Math.round(result.duration / 1000)}s`] : [])
-        ]
-      }
-    };
-    
-    this.contextStore.addContext(entry);
-    
-    logger.debug("Delegation context added", {
-      entryId: entry.id,
-      agentType: result.agentType,
-      success: result.success,
-      taskId: result.taskId
-    });
+        success: result.success,
+        taskId: result.taskId
+      });
+    } catch (err) {
+      logger.warn("[SupervisorRetriever] addDelegationContext failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   /**
@@ -453,107 +532,62 @@ export class SupervisorRetriever extends BaseRetriever {
   }
 
   /**
-   * Perform context cleanup
+   * Clean up old contexts older than maxAge (ms).
    */
-  cleanup(maxAge?: number): number {
-    const removed = this.contextStore.cleanup(maxAge);
-    
-    logger.info("Context cleanup completed", {
-      removedEntries: removed,
-      maxAge: maxAge || '7 days'
-    });
-    
-    return removed;
+  cleanup(maxAge: number = 7 * 24 * 60 * 60 * 1000): number {
+    try {
+      const removed = this.contextStore.cleanup(maxAge);
+      logger.info("[SupervisorRetriever] cleanup removed entries", { removed });
+      return removed;
+    } catch (err) {
+      logger.warn("[SupervisorRetriever] cleanup failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return 0;
+    }
   }
 
   /**
-   * Analyze query to determine optimal search options
+   * Use a constant list for query-based agentType detection.
    */
   private analyzeQueryForSearchOptions(query: string): {
     type?: string;
-    agentType?: string;
+    agentType?: typeof AGENT_TYPES[number];
     tags?: string[];
   } {
-    const queryLower = query.toLowerCase();
-    const options: {
-      type?: string;
-      agentType?: string;
-      tags?: string[];
-    } = {};
+    const opts: { type?: string; agentType?: typeof AGENT_TYPES[number]; tags?: string[] } = {};
+    const q = query.toLowerCase();
 
-    // Detect agent types
-    const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding'];
-    for (const agentType of agentTypes) {
-      if (queryLower.includes(agentType) || queryLower.includes(agentType.replace('_', ' '))) {
-        options.agentType = agentType;
+    for (const t of AGENT_TYPES) {
+      if (q.includes(t) || q.includes(t.replace('_', ' '))) {
+        opts.agentType = t;
         break;
       }
     }
 
     // Detect context types
-    if (queryLower.includes('delegation') || queryLower.includes('delegate')) {
-      options.type = 'delegation';
-    } else if (queryLower.includes('workflow') || queryLower.includes('process')) {
-      options.type = 'workflow';
-    } else if (queryLower.includes('capability') || queryLower.includes('can do') || queryLower.includes('able to')) {
-      options.type = 'agent_capability';
-    } else if (queryLower.includes('error') || queryLower.includes('problem') || queryLower.includes('issue')) {
-      options.type = 'error_resolution';
+    if (q.includes('delegation') || q.includes('delegate')) {
+      opts.type = 'delegation';
+    } else if (q.includes('workflow') || q.includes('process')) {
+      opts.type = 'workflow';
+    } else if (q.includes('capability') || q.includes('can do') || q.includes('able to')) {
+      opts.type = 'agent_capability';
+    } else if (q.includes('error') || q.includes('problem') || q.includes('issue')) {
+      opts.type = 'error_resolution';
     }
 
     // Extract tags from query
     const tags: string[] = [];
-    if (queryLower.includes('success')) tags.push('success');
-    if (queryLower.includes('fail')) tags.push('failure');
-    if (queryLower.includes('quick') || queryLower.includes('fast')) tags.push('fast');
-    if (queryLower.includes('slow') || queryLower.includes('long')) tags.push('slow');
+    if (q.includes('success')) tags.push('success');
+    if (q.includes('fail')) tags.push('failure');
+    if (q.includes('quick') || q.includes('fast')) tags.push('fast');
+    if (q.includes('slow') || q.includes('long')) tags.push('slow');
     
     if (tags.length > 0) {
-      options.tags = tags;
+      opts.tags = tags;
     }
 
-    return options;
-  }
-
-  /**
-   * Format retrieved contexts for agent consumption
-   */
-  private formatContextsForAgent(contexts: ContextEntry[], query: string): string {
-    if (contexts.length === 0) {
-      return `No relevant context found for query: "${query}". Proceeding with general knowledge and available tools.`;
-    }
-
-    const sections: string[] = [
-      `## Relevant Context (${contexts.length} entries found)`,
-      ``
-    ];
-
-    // Group contexts by type for better organization
-    const contextsByType = new Map<string, ContextEntry[]>();
-    for (const context of contexts) {
-      if (!contextsByType.has(context.type)) {
-        contextsByType.set(context.type, []);
-      }
-      contextsByType.get(context.type)!.push(context);
-    }
-
-    for (const [type, typeContexts] of contextsByType.entries()) {
-      sections.push(`### ${type.replace('_', ' ').toUpperCase()}`);
-      
-      for (const context of typeContexts) {
-        const timestamp = new Date(context.metadata.timestamp).toISOString();
-        const agentInfo = context.metadata.agentType ? ` (${context.metadata.agentType})` : '';
-        
-        sections.push(`**${context.source}${agentInfo}** - ${timestamp}`);
-        sections.push(context.content);
-        sections.push('');
-      }
-    }
-
-    sections.push(`## Instructions`);
-    sections.push(`Use the above context to inform your delegation decisions and responses. Consider previous successful patterns and agent capabilities when choosing how to handle the current request.`);
-
-    return sections.join('\n');
+    return opts;
   }
 }
 
@@ -563,6 +597,10 @@ export class SupervisorRetriever extends BaseRetriever {
 export const createSupervisorRetriever = (options?: {
   maxResults?: number;
   defaultMinScore?: number;
+  toolName?: string;
+  toolDescription?: string;
+  storeMaxSize?: number;
+  searchCacheSize?: number;
 }): SupervisorRetriever => {
   const retriever = new SupervisorRetriever(options);
   
@@ -621,7 +659,9 @@ export const createSupervisorRetriever = (options?: {
   logger.info("Supervisor retriever created with pre-populated capabilities", {
     capabilityCount: 7,
     maxResults: options?.maxResults || 10,
-    defaultMinScore: options?.defaultMinScore || 1
+    defaultMinScore: options?.defaultMinScore || 1,
+    storeMaxSize: options?.storeMaxSize ?? 1000,
+    searchCacheSize: options?.searchCacheSize ?? 100,
   });
 
   return retriever;
