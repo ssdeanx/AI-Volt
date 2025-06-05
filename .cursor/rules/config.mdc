@@ -3,9 +3,7 @@ description: "Configuration rules: validate all environment variables via Zod in
 globs: 
 alwaysApply: false
 ---
-# Configuration Rules
-# Validates environment and sets up structured logging consistently
-
+---
 description: "Configuration rules: validate all environment variables via Zod in src/config/environment.ts and use structured logging in src/config/logger.ts respecting LOG_LEVEL."
 globs:
   - "src/config/**/*.ts"

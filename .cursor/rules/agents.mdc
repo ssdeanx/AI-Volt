@@ -1,11 +1,9 @@
 ---
-description: "Agent factory rules: ensure each TypeScript file in src/agents defines exactly one VoltAgent Agent via new Agent({ … }) with required fields: name, instructions, llm, model, tools, memory, and hooks; supervisor Agent must include subAgents and retriever."
-globs: 
+description: 
+globs: src/agents/**/*.ts
 alwaysApply: false
 ---
-# Agent Factory Rules
-# Ensures correct structure and conventions for all Agent definitions
-
+---
 description: "Agent factory rules: ensure each TypeScript file in src/agents defines exactly one VoltAgent Agent via new Agent({ … }) with required fields: name, instructions, llm, model, tools, memory, and hooks; supervisor Agent must include subAgents and retriever."
 globs:
   - "src/agents/**/*.ts"
@@ -32,5 +30,6 @@ alwaysApply: true
    - Name conventions: e.g. `AI-Volt-Calculator`, `AI-Volt-DateTime`, etc.
 
 5. **Registration**: List each factory function in `src/agents/index.ts` for centralized imports.
+
 
 

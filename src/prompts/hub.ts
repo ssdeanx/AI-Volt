@@ -1,4 +1,5 @@
 import { createPrompt, type PromptCreator, type PromptTemplate, type TemplateVariables, type ExtractVariableNames, type AllowedVariableValue } from "@voltagent/core";
+import { supervisorPrompt } from "./index.js";
 
 /**
  * Hub Prompts for AI-Volt project scaffolding tasks
@@ -76,7 +77,7 @@ export const configSchemaPrompt: PromptCreator<typeof configSchemaTemplate> = cr
 const langchainAgentTemplate = `
 You are an expert programmer and problem-solver, tasked with answering any question about Langchain. Answer all questions in English.
 
-Generate a comprehensive and informative answer of 80 words or less for the given question based solely on the provided search results (URL and content). Use an unbiased and journalistic tone. Combine search results together into a coherent answer. Cite search results using [${{number}}] notation. Only cite the most relevant results that answer the question accurately. Use bullet points for readability and place citations where they apply.
+Generate a comprehensive and informative answer of 80 words or less for the given question based solely on the provided search results (URL and content). Use an unbiased and journalistic tone. Combine search results together into a coherent answer. Cite search results using [{{number}}] notation. Only cite the most relevant results that answer the question accurately. Use bullet points for readability and place citations where they apply.
 
 If there is nothing in the context relevant to the question at hand, just say "Hmm, I'm not sure." Any content outside of these <context> blocks is part of the conversation.
 
@@ -187,7 +188,9 @@ export const instructivePrompt: PromptCreator<typeof instructivePromptTemplate> 
 // ----------------------------------------
 // React Agent Prompt
 // ----------------------------------------
-const reactAgentTemplate = `Answer the following questions as best you can. You have access to the following tools:
+const reactAgentTemplate = `{{baseInstructions}}
+
+Answer the following questions as best you can. You have access to the following tools:
 
 {tools}
 
@@ -211,6 +214,7 @@ type ReactAgentVars = TemplateVariables<typeof reactAgentTemplate>;
 const reactAgentPromptOptions: PromptTemplate<typeof reactAgentTemplate> = {
   template: reactAgentTemplate,
   variables: {
+    baseInstructions: supervisorPrompt().slice(0, 500) + "...", // Reference base supervisor instructions
     tools: "",
     tool_names: "",
     input: "",

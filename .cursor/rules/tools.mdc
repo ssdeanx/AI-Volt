@@ -1,6 +1,53 @@
 ---
 description: "Tool creation rules: each tool under src/tools must use createTool({ name, description, parameters: z.object, execute }) and be exported in src/tools/index.ts."
-globs:
-  - "src/tools/**/*.ts"
+globs: 
 alwaysApply: false
 ---
+---
+# Tool Creation Rules
+# Standardize tool definitions and registrations in src/tools
+
+description: "Tool creation rules: each tool under src/tools must use createTool({ name, description, parameters: z.object, execute }) and be exported in src/tools/index.ts."
+globs:
+  - "src/tools/**/*.ts"
+alwaysApply: true
+---
+
+1. **Tool Definition**:
+   - In each file `src/tools/*.ts` use:
+     ```ts
+     export const myTool = createTool({
+       name: "tool_name",
+       description: "What it does",
+       parameters: z.object({ … }).describe("…"),
+       execute: async (args) => { … }
+     });
+     ```
+
+2. **Parameter Validation**:
+   - Define an explicit Zod schema (`z.object`) for every tool’s `parameters`, with `.describe()` on each field.
+
+3. **Execute Contract**:
+   - Return a POJO (plain object) on success or throw an `Error` on failure.
+   - Use `logger.debug()`, `logger.info()`, and `logger.error()` within the body.
+
+4. **Exports & Aggregation**:
+   - Export the tool from its module.
+   - In `src/tools/index.ts`, import & include it in the `allTools` array.
+   - Also export toolkits (`createToolkit`) in `allToolkits`, and maintain `toolCategories`.
+
+5. **Toolkits**:
+   - For related groups, use:
+     ```ts
+     export const myToolkit = createToolkit({
+       name: "my_toolkit",
+       description: "…",
+       instructions: "…",
+       tools: [toolA, toolB, …]
+     });
+     ```
+
+6. **Coding Conventions**:
+   - Use ESM `import` with `.js` extensions.
+   - Keep each file focused on one tool or one toolkit.
+   - Document each tool with TSDoc: purpose, input schema, and example.

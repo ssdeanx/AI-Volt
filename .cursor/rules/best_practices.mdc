@@ -3,6 +3,7 @@ description:
 globs: 
 alwaysApply: false
 ---
+
 1. **NPM Scripts & Dependencies**:
    - Define common scripts in `package.json`: `build`, `dev`, `start`, `test`, and `lint`.
    - Use `npm ci` for CI environments to install exact versions from `package-lock.json`.

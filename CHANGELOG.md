@@ -5,14 +5,55 @@ All notable changes to the AI-Volt project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1]
 
-### Future Enhancements
-- Performance optimizations for web scraping operations
-- Enhanced error recovery mechanisms
-- Additional worker agent specializations
-- Advanced memory management features
-- Integration with more AI providers
+### 🔧 Technical Details
+
+#### Tool Integration
+
+- **Enhanced Web Browser Tools**: Advanced web scraping and processing capabilities
+  - Secure web processor with validation
+  - Web scraping manager with rate limiting
+  - Content validator for data integrity
+  - Enhanced web browser toolkit with comprehensive features
+- **Standard Web Browser Tools**: Basic web operations
+  - DuckDuckGo search integration
+  - Text extraction from web pages
+  - Link extraction and analysis
+  - Metadata extraction (title, description, og tags)
+  - HTML table extraction
+  - JSON-LD structured data extraction
+- **Calculator Tools**: Mathematical operations
+  - Basic arithmetic (add, subtract, multiply, divide)
+  - Advanced operations (power, square root, factorial)
+  - Input validation and error handling
+- **DateTime Tools**: Comprehensive time operations
+  - Current date/time retrieval
+  - Date formatting in multiple formats
+  - Time addition/subtraction calculations
+  - Time difference calculations
+  - Timezone conversions
+- **System Information Tools**: Real-time monitoring
+  - Memory usage tracking
+  - CPU information and specifications
+  - Network interface details
+  - Process information and management
+  - Environment settings analysis
+- **Git Tools**: Version control operations
+  - Repository status and information
+  - Commit history and branch management
+  - Enhanced Git operations
+- **MCP Tools**: Model Context Protocol integration
+- **Coding Tools**: Development assistance
+  - Code analysis and execution
+  - File operations and management
+- **Weather Tools**: Weather information and forecasting
+- **Task Delegation**: Inter-agent communication system
+- **GitHub Tools**: Comprehensive suite for GitHub API interactions
+  - **Repository Content**: Fetch file content (`getFileContentTool`), list repository contents (`listRepositoryContentsTool`)
+  - **Pull Request Management**: List PRs (`listPullRequestsTool`), get PR details (`getPullRequestDetailsTool`), create PRs (`createPullRequestTool`), merge PRs (`mergePullRequestTool`), comment on PRs (`commentOnPullRequestTool`), list PR files (`listPullRequestFilesTool`)
+  - **Repository Management**: Create repositories (`createRepositoryTool`), delete repositories (`deleteRepositoryTool`), list webhooks (`listRepositoryHooksTool`), create webhooks (`createRepositoryHookTool`)
+  - **User/Organization Information**: Get user profile (`getUserProfileTool`), list organization members (`listOrgMembersTool`)
 
 ---
 
