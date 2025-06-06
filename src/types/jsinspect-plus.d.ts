@@ -1,0 +1,1 @@
+declare module 'jsinspect-plus/lib/inspector.js'; 

@@ -7,6 +7,10 @@
 export { calculatorTool } from "./calculator.js";
 export { dateTimeTool } from "./datetime.js";
 export { systemInfoTool } from "./systemInfo.js";
+export { ingestDocumentTool, queryKnowledgeBaseTool, summarizeDocumentTool, listKnowledgeBaseDocumentsTool } from "./knowledgeBaseTools.js";
+export { getNodeProcessInfoTool, guideNodeProfilerTool, runIsolatedCodeTool, runJsInspectTool, runEslintTool, identifySecurityAntiPatternsTool, analyzeCodeComplexityTool, analyzeLogPatternsTool, getAgentExecutionTimelineTool } from "./debugTools.js";
+export { readDataFromFileTool, analyzeCsvDataTool, writeDataToFileTool, checksumFileTool, compressFileTool, decompressFileTool, findInFileTool } from "./dataTools.js";
+export { deployServiceTool, manageResourcesTool, monitorCloudTool, buildImageTool, pullImageTool, listImagesTool, removeImageTool, execContainerCommandTool, inspectContainerTool, createNetworkTool, listNetworksTool, removeNetworkTool, createVolumeTool, listVolumesTool, removeVolumeTool } from "./cloudTools.js";
 
 export { 
   webSearchTool, 
@@ -83,6 +87,7 @@ export {
 import { calculatorTool } from "./calculator.js";
 import { dateTimeTool } from "./datetime.js";
 import { systemInfoTool } from "./systemInfo.js";
+import { ingestDocumentTool, queryKnowledgeBaseTool, summarizeDocumentTool, listKnowledgeBaseDocumentsTool } from "./knowledgeBaseTools.js";
 import {
   navigationTool,
   screenshotTool,
@@ -152,6 +157,19 @@ import {
   getUserProfileTool,
   listOrgMembersTool,
 } from "./githubTool.js";
+import {
+  getNodeProcessInfoTool,
+  guideNodeProfilerTool,
+  runIsolatedCodeTool,
+  runJsInspectTool,
+  runEslintTool,
+  identifySecurityAntiPatternsTool,
+  analyzeCodeComplexityTool,
+  analyzeLogPatternsTool,
+  getAgentExecutionTimelineTool
+} from "./debugTools.js";
+import { readDataFromFileTool, analyzeCsvDataTool, writeDataToFileTool, checksumFileTool, compressFileTool, decompressFileTool, findInFileTool } from "./dataTools.js";
+import { deployServiceTool, manageResourcesTool, monitorCloudTool, buildImageTool, pullImageTool, listImagesTool, removeImageTool, execContainerCommandTool, inspectContainerTool, createNetworkTool, listNetworksTool, removeNetworkTool, createVolumeTool, listVolumesTool, removeVolumeTool } from "./cloudTools.js";
 
 /**
  * Array of all available individual tools for the AI-Volt agent
@@ -160,6 +178,10 @@ export const allTools = [
   calculatorTool,
   dateTimeTool,
   systemInfoTool,
+  ingestDocumentTool,
+  queryKnowledgeBaseTool,
+  summarizeDocumentTool,
+  listKnowledgeBaseDocumentsTool,
   webSearchTool,
   extractTextTool,
   extractLinksTool,
@@ -214,6 +236,39 @@ export const allTools = [
   createRepositoryHookTool,
   getUserProfileTool,
   listOrgMembersTool,
+  // Debugging tools
+  getNodeProcessInfoTool,
+  guideNodeProfilerTool,
+  runIsolatedCodeTool,
+  runJsInspectTool,
+  runEslintTool,
+  identifySecurityAntiPatternsTool,
+  analyzeCodeComplexityTool,
+  analyzeLogPatternsTool,
+  getAgentExecutionTimelineTool,
+  promptManagementToolkit,
+  readDataFromFileTool,
+  analyzeCsvDataTool,
+  writeDataToFileTool,
+  checksumFileTool,
+  compressFileTool,
+  decompressFileTool,
+  findInFileTool,
+  deployServiceTool,
+  manageResourcesTool,
+  monitorCloudTool,
+  buildImageTool,
+  pullImageTool,
+  listImagesTool,
+  removeImageTool,
+  execContainerCommandTool,
+  inspectContainerTool,
+  createNetworkTool,
+  listNetworksTool,
+  removeNetworkTool,
+  createVolumeTool,
+  listVolumesTool,
+  removeVolumeTool,
 ] as const;
 
 /**

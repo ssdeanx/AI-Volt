@@ -82,6 +82,12 @@ import {
   getUserProfileTool,
   listOrgMembersTool,
 } from "../tools/githubTool.js";
+import { runIsolatedCodeTool, runJsInspectTool, runEslintTool } from "../tools/debugTools.js";
+import { identifySecurityAntiPatternsTool } from "../tools/debugTools.js";
+import { getNodeProcessInfoTool, guideNodeProfilerTool, analyzeCodeComplexityTool, analyzeLogPatternsTool, getAgentExecutionTimelineTool } from "../tools/debugTools.js";
+import { ingestDocumentTool, queryKnowledgeBaseTool, summarizeDocumentTool, listKnowledgeBaseDocumentsTool } from "../tools/knowledgeBaseTools.js";
+import { readDataFromFileTool, analyzeCsvDataTool, writeDataToFileTool } from "../tools/dataTools.js";
+import { deployServiceTool, manageResourcesTool, monitorCloudTool } from "../tools/cloudTools.js";
 /**
  * Context symbols for type-safe userContext keys
  * Following VoltAgent best practices for avoiding key collisions
@@ -798,7 +804,7 @@ export const createWorkerAgents = async () => {
     // System Info worker agent
     const systemInfoWorker = new Agent({
       name: "AI-Volt-SystemInfo",
-      instructions: workerPrompts.generate("systemInfo", ["systemInfoTool"], "System monitoring, performance checks, diagnostics"),
+      instructions: workerPrompts.systemInfo(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
       tools: [systemInfoTool],
@@ -809,7 +815,7 @@ export const createWorkerAgents = async () => {
     // File Operations worker agent - uses the coding tools for file operations
     const fileOpsWorker = new Agent({
       name: "AI-Volt-FileOps",
-      instructions: workerPrompts.generate("fileops", ["fileSystemOperationsTool","secureCodeExecutorTool"], "File operations and management"),
+      instructions: workerPrompts.fileOps(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
       tools: [fileSystemOperationsTool, secureCodeExecutorTool],
@@ -820,7 +826,7 @@ export const createWorkerAgents = async () => {
     // Git worker agent - uses git tools
     const gitWorker = new Agent({
       name: "AI-Volt-Git",
-      instructions: workerPrompts.generate("git", ["gitStatusTool","gitAddTool","gitCommitTool","gitPushTool","gitPullTool","gitBranchTool","gitLogTool","gitDiffTool","gitMergeTool","gitResetTool","gitTool","enhancedGitStatusTool","secureGitScriptTool","gitRepositoryAnalysisTool","gitHookValidatorTool","getFileContentTool","listRepositoryContentsTool","listPullRequestsTool","getPullRequestDetailsTool","createPullRequestTool","mergePullRequestTool","commentOnPullRequestTool","listPullRequestFilesTool","createRepositoryTool","deleteRepositoryTool","listRepositoryHooksTool","createRepositoryHookTool","getUserProfileTool","listOrgMembersTool"], "Git version control operations and repository management"),
+      instructions: workerPrompts.git(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
@@ -854,6 +860,8 @@ export const createWorkerAgents = async () => {
         createRepositoryHookTool,
         getUserProfileTool,
         listOrgMembersTool,
+        runJsInspectTool,
+        runEslintTool,
       ],
       memory: createWorkerMemory("git"),
       hooks: createWorkerHooks("git"),
@@ -862,7 +870,7 @@ export const createWorkerAgents = async () => {
     // Browser worker agent - uses web browser tools
     const researchWorker = new Agent({
       name: "AI-Volt-Research",
-      instructions: workerPrompts.generate("research", ["webSearchTool","extractTextTool","extractLinksTool","extractMetadataTool","extractTablesTool","extractJsonLdTool","secureWebProcessorTool","webScrapingManagerTool","webContentValidatorTool"], "Research and analysis"),
+      instructions: workerPrompts.research(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
@@ -884,7 +892,7 @@ export const createWorkerAgents = async () => {
     // Coding worker agent - uses coding tools
     const codingWorker = new Agent({
       name: "AI-Volt-Coding",
-      instructions: workerPrompts.generate("coding", ["secureCodeExecutorTool","fileSystemOperationsTool","codeAnalysisTool","projectStructureGeneratorTool","reasoningToolkit","thinkOnlyToolkit","getFileContentTool","listRepositoryContentsTool","listRepositoryHooksTool","createRepositoryHookTool","getUserProfileTool","listOrgMembersTool","createRepositoryTool","deleteRepositoryTool","listPullRequestsTool","getPullRequestDetailsTool","createPullRequestTool","mergePullRequestTool","commentOnPullRequestTool","listPullRequestFilesTool"], "Coding and development assistance"),
+      instructions: workerPrompts.coding(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 2048,},} satisfies GoogleGenerativeAIProviderOptions,},
@@ -911,6 +919,13 @@ export const createWorkerAgents = async () => {
         enhancedGitStatusTool,
         secureGitScriptTool,
         gitRepositoryAnalysisTool,
+        runIsolatedCodeTool,
+        runJsInspectTool,
+        runEslintTool,
+        identifySecurityAntiPatternsTool,
+        analyzeCodeComplexityTool,
+        analyzeLogPatternsTool,
+        getAgentExecutionTimelineTool,
       ],
       memory: createWorkerMemory("coding"),
       hooks: createWorkerHooks("coding"),
@@ -919,7 +934,7 @@ export const createWorkerAgents = async () => {
     // Prompt Management worker agent - NEW 2025 enhancement
     const promptManagerWorker = new Agent({
       name: "AI-Volt-PromptManager",
-      instructions: workerPrompts.generate("promptManager", ["promptManagementToolkit","reasoningToolkit","calculatorTool","webSearchTool"], "Prompt engineering and management"),
+      instructions: workerPrompts.promptManager(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 1024,},} satisfies GoogleGenerativeAIProviderOptions,},
@@ -936,10 +951,22 @@ export const createWorkerAgents = async () => {
     // Debug worker agent - uses the coding tools for file oprations
     const debugWorker = new Agent({
       name: "AI-Volt-Debug",
-      instructions: workerPrompts.generate("debug", ["fileSystemOperationsTool","secureCodeExecutorTool"], "Debugging and management"),
+      instructions: workerPrompts.debug(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
-      tools: [fileSystemOperationsTool, secureCodeExecutorTool],
+      tools: [
+        fileSystemOperationsTool, 
+        secureCodeExecutorTool,
+        getNodeProcessInfoTool,
+        guideNodeProfilerTool,
+        runIsolatedCodeTool,
+        runJsInspectTool,
+        runEslintTool,
+        identifySecurityAntiPatternsTool,
+        analyzeCodeComplexityTool,
+        analyzeLogPatternsTool,
+        getAgentExecutionTimelineTool,
+      ],
       memory: createWorkerMemory("debug"),
       hooks: createWorkerHooks("debug"),
     });
@@ -962,8 +989,54 @@ export const createWorkerAgents = async () => {
       hooks: createWorkerHooks("browser"),
     });
 
+    // Knowledge Base worker agent - NEW
+    const knowledgeBaseWorker = new Agent({
+      name: "AI-Volt-KnowledgeBase",
+      instructions: workerPrompts.knowledgeBase(),
+      llm: new VercelAIProvider(),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
+      tools: [
+        ingestDocumentTool,
+        queryKnowledgeBaseTool,
+        summarizeDocumentTool,
+        listKnowledgeBaseDocumentsTool,
+      ],
+      memory: createWorkerMemory("knowledgebase"),
+      hooks: createWorkerHooks("knowledgebase"),
+    });
 
-    
+    // Data worker agent - NEW
+    const dataWorker = new Agent({
+      name: "AI-Volt-Data",
+      instructions: workerPrompts.data(),
+      llm: new VercelAIProvider(),
+      model: google("gemini-2.0-flash"),
+      tools: [
+        readDataFromFileTool,
+        analyzeCsvDataTool,
+        writeDataToFileTool,
+        fileSystemOperationsTool, // Generic file system operations might be useful for data agent too
+      ],
+      memory: createWorkerMemory("data"),
+      hooks: createWorkerHooks("data"),
+    });
+
+    // Cloud worker agent - NEW
+    const cloudWorker = new Agent({
+      name: "AI-Volt-Cloud",
+      instructions: workerPrompts.cloud(),
+      llm: new VercelAIProvider(),
+      model: google("gemini-2.0-flash"),
+      tools: [
+        deployServiceTool,
+        manageResourcesTool,
+        monitorCloudTool,
+      ],
+      memory: createWorkerMemory("cloud"),
+      hooks: createWorkerHooks("cloud"),
+    });
+
     const workers = {
       calculator: calculatorWorker,
       datetime: dateTimeWorker,
@@ -975,6 +1048,9 @@ export const createWorkerAgents = async () => {
       promptManager: promptManagerWorker,
       debug: debugWorker,
       research: researchWorker,
+      knowledgeBase: knowledgeBaseWorker,
+      data: dataWorker,
+      cloud: cloudWorker,
     };
 
     logger.info("Specialized worker agents created successfully", {

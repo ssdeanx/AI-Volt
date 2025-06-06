@@ -52,6 +52,9 @@ async function startAIVolt(): Promise<void> {
         "prompt-manager": workerAgents.promptManager,
         "debug": workerAgents.debug,
         "research": workerAgents.research,
+        "knowledge-base": workerAgents.knowledgeBase, 
+        "data": workerAgents.data,
+        "cloud": workerAgents.cloud,
       },
       telemetryExporter: new VoltAgentExporter({
         publicKey: env.PK,
