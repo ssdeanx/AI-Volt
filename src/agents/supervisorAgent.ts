@@ -8,7 +8,7 @@ import { Agent, LibSQLStorage, createHooks, type OnStartHookArgs, type OnEndHook
 import { VercelAIProvider } from "@voltagent/vercel-ai";
 import { google } from "@ai-sdk/google";
 import { generateId } from "ai";
-import { calculatorTool } from "../tools/calculator.js";
+import { calculatorTool, statisticsAnalysisTool } from "../tools/calculator.js";
 import { dateTimeTool } from "../tools/datetime.js";
 import { systemInfoTool } from "../tools/systemInfo.js";
 import { 
@@ -785,7 +785,7 @@ export const createWorkerAgents = async () => {
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
-      tools: [calculatorTool],
+      tools: [calculatorTool, statisticsAnalysisTool],
       memory: createWorkerMemory("calculator"),
       hooks: createWorkerHooks("calculator"),
     });

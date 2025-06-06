@@ -4,9 +4,9 @@
  */
 
 // Individual Tool Exports
-export { calculatorTool } from "./calculator.js";
+export { calculatorTool, statisticsAnalysisTool } from "./calculator.js";
 export { dateTimeTool } from "./datetime.js";
-export { systemInfoTool } from "./systemInfo.js";
+export { systemInfoTool, codeExecutionEnvironmentAnalysisTool } from "./systemInfo.js";
 export { ingestDocumentTool, queryKnowledgeBaseTool, summarizeDocumentTool, listKnowledgeBaseDocumentsTool } from "./knowledgeBaseTools.js";
 export { getNodeProcessInfoTool, guideNodeProfilerTool, runIsolatedCodeTool, runJsInspectTool, runEslintTool, identifySecurityAntiPatternsTool, analyzeCodeComplexityTool, analyzeLogPatternsTool, getAgentExecutionTimelineTool } from "./debugTools.js";
 export { readDataFromFileTool, analyzeCsvDataTool, writeDataToFileTool, checksumFileTool, compressFileTool, decompressFileTool, findInFileTool } from "./dataTools.js";
@@ -84,9 +84,9 @@ export {
 } from "./githubTool.js";
 
 // Import all tools for array registration
-import { calculatorTool } from "./calculator.js";
+import { calculatorTool, statisticsAnalysisTool } from "./calculator.js";
 import { dateTimeTool } from "./datetime.js";
-import { systemInfoTool } from "./systemInfo.js";
+import { systemInfoTool, codeExecutionEnvironmentAnalysisTool } from "./systemInfo.js";
 import { ingestDocumentTool, queryKnowledgeBaseTool, summarizeDocumentTool, listKnowledgeBaseDocumentsTool } from "./knowledgeBaseTools.js";
 import {
   navigationTool,
@@ -176,8 +176,10 @@ import { deployServiceTool, manageResourcesTool, monitorCloudTool, buildImageToo
  */
 export const allTools = [
   calculatorTool,
+  statisticsAnalysisTool,
   dateTimeTool,
   systemInfoTool,
+  codeExecutionEnvironmentAnalysisTool,
   ingestDocumentTool,
   queryKnowledgeBaseTool,
   summarizeDocumentTool,

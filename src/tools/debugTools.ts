@@ -9,6 +9,9 @@ import { Inspector } from "jsinspect-plus/lib/inspector.js";
 import { Complexity } from "eslintcc";
 import * as fs from 'fs/promises'; // Import fs.promises for file operations
 import dayjs from 'dayjs'; // Import dayjs for date parsing and formatting
+import * as child_process from "child_process";
+import os from "os";
+
 // Initialize shell with secure defaults
 shell.config.silent = true; // Suppress output to console
 shell.config.fatal = false; // Don't exit on command failure
@@ -50,7 +53,7 @@ export const getNodeProcessInfoTool = createTool({
             });
           }
         });
-      } else { // Linux/macOS parsing (basic)
+      } else {
         const lines = rawOutput.split('\\n');
         lines.forEach(line => {
           const parts = line.trim().split(/\\s+/);
@@ -615,131 +618,138 @@ export const getAgentExecutionTimelineTool = createTool({
   },
 });
 
-// /**
-//  * Tool to trace function calls within a sandboxed JavaScript code snippet.
-//  */
-// export const traceFunctionCallsTool = createTool({
-//   name: "trace_function_calls",
-//   description: "Traces function calls within a provided JavaScript code snippet in an isolated VM. It logs function names, arguments, return values, and errors.",
-//   parameters: z.object({
-//     code: z.string().describe("The JavaScript code snippet to trace."),
-//     functionNames: z.array(z.string()).optional().describe("Optional: An array of function names to specifically trace. If not provided, all top-level function calls will be traced."),
-//     timeout: z.number().optional().default(5000).describe("Optional: Maximum execution time in milliseconds (default: 5000)."),
-//   }),
-//   execute: async ({ code, functionNames, timeout }) => {
-//     logger.info("[traceFunctionCallsTool] Tracing function calls in isolated VM");
-//     const isolate = new ivm.Isolate({
-//       memoryLimit: 128,
-//     });
-//     const context = await isolate.createContext();
-//     const jail = context.global;
+/**
+ * Process Management Tool
+ * Provides capabilities to list, terminate, and get metrics for system processes.
+ */
+const processManagementSchema = z.object({
+  operation: z.enum(["list_processes", "terminate_process", "get_process_metrics"]).describe("Process management operation to perform"),
+  pid: z.number().optional().describe("Process ID for terminate or get_process_metrics operations"),
+});
 
-//     // Create a custom console for capturing output
-//     const traceOutput: string[] = [];
-//     const customConsole = {
-//       log: (...args: any[]) => { traceOutput.push(`[LOG]: ${args.map(a => String(a)).join(" ")}`); },
-//       error: (...args: any[]) => { traceOutput.push(`[ERROR]: ${args.map(a => String(a)).join(" ")}`); },
-//       warn: (...args: any[]) => { traceOutput.push(`[WARN]: ${args.map(a => String(a)).join(" ")}`); },
-//       info: (...args: any[]) => { traceOutput.push(`[INFO]: ${args.map(a => String(a)).join(" ")}`); },
-//       debug: (...args: any[]) => { traceOutput.push(`[DEBUG]: ${args.map(a => String(a)).join(" ")}`); },
-//     };
-//     await context.global.set('console', new ivm.Reference(customConsole));
+type ProcessManagementInput = z.infer<typeof processManagementSchema>;
 
-//     // Setup tracing mechanism
-//     const traceFunction = new ivm.Reference(function(fnName: string, args: any[], result: any, error: any) {
-//       if (error) {
-//         traceOutput.push(`[TRACE ERROR] Function: ${fnName}, Args: ${JSON.stringify(args)}, Error: ${error.message}`);
-//       } else {
-//         traceOutput.push(`[TRACE] Function: ${fnName}, Args: ${JSON.stringify(args)}, Result: ${JSON.stringify(result)}`);
-//       }
-//     });
+export const processManagementTool = createTool({
+  name: "process_management",
+  description: "Manages system processes: list all processes, terminate a process by PID, or get CPU/memory metrics for a specific process.",
+  parameters: processManagementSchema,
+  execute: async ({ operation, pid }: ProcessManagementInput) => {
+    logger.debug(`[processManagementTool] Executing operation: ${operation} with PID: ${pid || 'N/A'}`);
 
-//     // Wrap target functions with a tracing proxy
-//     const wrappedCode = `
-//       const originalFunctions = {};
-//       const functionsToTrace = ${JSON.stringify(functionNames || [])};
+    let command: string;
 
-//       function wrapFunction(fnName, originalFn) {
-//         return function(...args) {
-//           let result, error;
-//           try {
-//             result = originalFn.apply(this, args);
-//             // If the function returns a Promise, trace when it resolves/rejects
-//             if (result instanceof Promise) {
-//               result = result.then(res => {
-//                 __traceFunction(fnName, args, res, null);
-//                 return res;
-//               }).catch(err => {
-//                 __traceFunction(fnName, args, null, err);
-//                 throw err;
-//               });
-//             } else {
-//               __traceFunction(fnName, args, result, null);
-//             }
-//             return result;
-//           } catch (e) {
-//             error = e;
-//             __traceFunction(fnName, args, null, error);
-//             throw e;
-//           }
-//         };
-//       }
+    try {
+      switch (operation) {
+        case "list_processes":
+          if (os.platform() === "win32") {
+            command = "wmic process get ProcessId,Caption,WorkingSetSize,CommandLine /format:csv";
+          } else {
+            command = "ps aux";
+          }
+          return new Promise((resolve, reject) => {
+            child_process.exec(command, (error, stdout, stderr) => {
+              if (error) {
+                logger.error(`[processManagementTool] List processes error: ${error.message}`);
+                return reject(new Error(`Failed to list processes: ${stderr}`));
+              }
 
-//       // Wrap global functions or functions specified by name
-//       for (const fnName of functionsToTrace) {
-//         if (typeof global[fnName] === 'function') {
-//           originalFunctions[fnName] = global[fnName];
-//           global[fnName] = wrapFunction(fnName, global[fnName]);
-//         } else {
-//           // Attempt to find and wrap functions in the provided code itself
-//           // This is a simplified approach; a more robust solution would involve AST transformation
-//           // For now, we assume direct global or easily accessible functions.
-//           try {
-//             const patternString = `\\b${fnName}\\s*=\\s*function\\s*\\(|\\bfunction\\s+${fnName}\\s*\\(`;
-//             const match = new RegExp(patternString, 'g').exec(code);
-//             if (match) {
-//               // This part is complex without AST manipulation. For a real production tool,
-//               // we would need a more sophisticated code transformation.
-//               // This placeholder indicates where AST transformation would occur.
-//               traceOutput.push(`[WARN] Function '${fnName}' found but cannot be directly wrapped without AST transformation.`);
-//             }
-//           } catch (e) {
-//             // ignore regex errors
-//           }
-//         }
-//       }
+              const processes: any[] = [];
+              const lines = stdout.trim().split('\n');
 
-//       // Execute the user's code
-//       ${code}
-//     `;
+              if (os.platform() === "win32") {
+                // PID,Caption,WorkingSetSize,CommandLine
+                lines.slice(1).forEach(line => {
+                  const parts = line.split(',');
+                  if (parts.length >= 4) {
+                    processes.push({
+                      pid: parseInt(parts[3]), // PID
+                      name: parts[1], // Caption
+                      memoryUsage: parseInt(parts[4]), // WorkingSetSize (bytes)
+                      command: parts[2], // CommandLine
+                    });
+                  }
+                });
+              } else {
+                lines.slice(1).forEach(line => {
+                  const parts = line.trim().split(/\s+/);
+                  if (parts.length > 10) {
+                    processes.push({
+                      user: parts[0],
+                      pid: parseInt(parts[1]),
+                      cpu: parseFloat(parts[2]),
+                      memory: parseFloat(parts[3]),
+                      command: parts.slice(10).join(' '),
+                    });
+                  }
+                });
+              }
+              resolve({ success: true, processes });
+            });
+          });
 
-//     await jail.set('__traceFunction', traceFunction); // Make the tracing function available in the isolate
-//     await jail.set('global', jail.derefInto()); // Ensure global is accessible if needed by user code
+        case "terminate_process":
+          if (pid === undefined) throw new Error("PID is required to terminate a process");
+          if (os.platform() === "win32") {
+            command = `taskkill /PID ${pid} /F`;
+          } else {
+            command = `kill ${pid}`; // -9 for forceful kill
+          }
+          return new Promise((resolve, reject) => {
+            child_process.exec(command, (error, stdout, stderr) => {
+              if (error) {
+                logger.error(`[processManagementTool] Terminate process error: ${error.message}`);
+                return reject(new Error(`Failed to terminate process ${pid}: ${stderr || error.message}`));
+              }
+              resolve({ success: true, message: `Process ${pid} terminated successfully.` });
+            });
+          });
 
-//     let vmResult: any;
-//     try {
-//       const script = await isolate.compileScript(wrappedCode, { filename: 'traced_code.js' });
-//       vmResult = await script.run(context, {
-//         timeout: timeout,
-//         copy: true,
-//       });
+        case "get_process_metrics":
+          if (pid === undefined) throw new Error("PID is required to get process metrics");
+          // This is complex and OS-dependent. For simplicity, we'll try to parse `ps` output.
+          if (os.platform() === "win32") {
+            command = `wmic path Win32_PerfRawData_PerfProc_Process where IDProcess=${pid} get PercentProcessorTime,WorkingSet /value`;
+          } else {
+            command = `ps -p ${pid} -o %cpu,%mem,rss,vsz,comm`;
+          }
+          return new Promise((resolve, reject) => {
+            child_process.exec(command, (error, stdout, stderr) => {
+              if (error) {
+                logger.error(`[processManagementTool] Get metrics error: ${error.message}`);
+                return reject(new Error(`Failed to get metrics for process ${pid}: ${stderr || error.message}`));
+              }
 
-//       return {
-//         success: true,
-//         message: "Function tracing completed.",
-//         traceOutput: traceOutput,
-//         result: vmResult,
-//       };
-//     } catch (error) {
-//       logger.error("[traceFunctionCallsTool] Error during tracing", { error: (error as Error).message });
-//       return {
-//         success: false,
-//         message: "Function tracing failed.",
-//         traceOutput: traceOutput,
-//         error: (error as Error).message,
-//       };
-//     } finally {
-//       isolate.dispose();
-//     }
-//   },
-// }); 
+              let metrics: any = {};
+              if (os.platform() === "win32") {
+                const lines = stdout.trim().split('\n').filter(line => line.includes('='));
+                lines.forEach(line => {
+                  const [key, value] = line.split('=');
+                  if (key === "PercentProcessorTime") metrics.cpuUsage = parseFloat(value);
+                  if (key === "WorkingSet") metrics.memoryUsage = parseInt(value);
+                });
+              } else {
+                const lines = stdout.trim().split('\n');
+                if (lines.length > 1) {
+                  const parts = lines[1].trim().split(/\s+/);
+                  metrics = {
+                    cpuUsage: parseFloat(parts[0]),
+                    memoryUsagePercent: parseFloat(parts[1]),
+                    rss: parseInt(parts[2]), // Resident Set Size (KB)
+                    vsz: parseInt(parts[3]), // Virtual Size (KB)
+                    command: parts.slice(4).join(' '),
+                  };
+                }
+              }
+              resolve({ success: true, pid, metrics });
+            });
+          });
+
+        default:
+          throw new Error(`Unsupported operation: ${operation}`);
+      }
+    } catch (error) {
+      logger.error(`[processManagementTool] Operation failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Process management operation failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  },
+}); 

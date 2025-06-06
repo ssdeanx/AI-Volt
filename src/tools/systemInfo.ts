@@ -9,6 +9,7 @@ import { logger } from "../config/logger.js";
 import { env } from "../config/environment.js";
 import * as os from "os";
 import * as process from "process";
+import * as child_process from "child_process";
 
 /**
  * Schema for system information requests
@@ -21,7 +22,10 @@ const systemInfoSchema = z.object({
     "cpu",
     "network",
     "process",
-    "environment"
+    "environment",
+    "disk",
+    "users",
+    "os_details"
   ]).describe("Category of system information to retrieve"),
 });
 
@@ -117,11 +121,66 @@ const getEnvironmentInfo = () => {
 };
 
 /**
+ * Get disk usage information
+ */
+const getDiskInfo = async () => {
+  return new Promise((resolve, reject) => {
+    child_process.exec('df -h', (error, stdout, stderr) => {
+      if (error) {
+        logger.error(`Disk info error: ${error.message}`);
+        reject(new Error(`Failed to get disk info: ${stderr}`));
+      }
+      const lines = stdout.trim().split('\n').slice(1);
+      const disks = lines.map(line => {
+        const parts = line.split(/\s+/);
+        return {
+          filesystem: parts[0],
+          size: parts[1],
+          used: parts[2],
+          available: parts[3],
+          capacity: parts[4],
+          mounted_on: parts[5],
+        };
+      });
+      resolve(disks);
+    });
+  });
+};
+
+/**
+ * Get user information
+ */
+const getUserInfo = () => {
+  return {
+    username: os.userInfo().username,
+    uid: os.userInfo().uid,
+    gid: os.userInfo().gid,
+    homedir: os.userInfo().homedir,
+    shell: os.userInfo().shell,
+  };
+};
+
+/**
+ * Get detailed OS information
+ */
+const getOsDetails = () => {
+  return {
+    platform: os.platform(),
+    type: os.type(),
+    release: os.release(),
+    endianness: os.endianness(),
+    hostname: os.hostname(),
+    arch: os.arch(),
+    version: os.version(),
+  };
+};
+
+/**
  * System information tool implementation
  */
 export const systemInfoTool = createTool({
   name: "system_info",
-  description: "Retrieve comprehensive system information including memory usage, CPU details, network interfaces, process information, and environment settings. Useful for monitoring and diagnostics.",
+  description: "Retrieve comprehensive system information including memory usage, CPU details, network interfaces, process information, environment settings, disk usage, user details, and detailed OS information. Useful for monitoring and diagnostics.",
   parameters: systemInfoSchema,
   execute: async ({ category }: SystemInfoInput) => {
     try {
@@ -146,7 +205,10 @@ export const systemInfoTool = createTool({
             cpu: getCpuInfo(),
             network: getNetworkInfo(),
             process: getProcessInfo(),
-            environment: getEnvironmentInfo()
+            environment: getEnvironmentInfo(),
+            disk: await getDiskInfo(),
+            users: getUserInfo(),
+            os_details: getOsDetails(),
           };
           break;
 
@@ -183,6 +245,18 @@ export const systemInfoTool = createTool({
           result = getEnvironmentInfo();
           break;
 
+        case "disk":
+          result = await getDiskInfo();
+          break;
+
+        case "users":
+          result = getUserInfo();
+          break;
+
+        case "os_details":
+          result = getOsDetails();
+          break;
+
         default:
           throw new Error(`Unknown category: ${category}`);
       }
@@ -199,6 +273,94 @@ export const systemInfoTool = createTool({
       logger.error("System info operation failed", error);
       
       throw new Error(`System info operation failed: ${errorMessage}`);
+    }
+  },
+});
+
+/**
+ * Code Execution Environment Analysis Tool
+ * Provides detailed insights into the environment where code is executed.
+ */
+const codeExecutionEnvironmentSchema = z.object({
+  category: z.enum(["all", "runtime_versions", "environment_variables", "resource_limits"]).default("all").describe("Category of execution environment information to retrieve"),
+});
+
+type CodeExecutionEnvironmentInput = z.infer<typeof codeExecutionEnvironmentSchema>;
+
+const getRuntimeVersions = () => {
+  return {
+    node: process.version,
+    v8: process.versions.v8,
+    openssl: process.versions.openssl,
+    zlib: process.versions.zlib,
+    uv: process.versions.uv,
+  };
+};
+
+const getFilteredEnvironmentVariables = () => {
+  const relevantEnvVars = [
+    "NODE_ENV", "PATH", "HOME", "TEMP", "TMPDIR", "NODE_OPTIONS", "PORT", "LOG_LEVEL",
+    "LANG", "SHELL", "TERM", "USER", "USERNAME", "PWD", "OLDPWD",
+    "VIRTUAL_ENV", // For Python virtual environments if applicable
+  ];
+  const envVars: { [key: string]: string | undefined } = {};
+  relevantEnvVars.forEach(key => {
+    if (process.env[key]) {
+      envVars[key] = process.env[key];
+    }
+  });
+  return envVars;
+};
+
+const getResourceLimits = () => {
+  const memoryInfo = getMemoryInfo(); // Re-use existing function for consistency
+  const cpuInfo = getCpuInfo(); // Re-use existing function for consistency
+  return {
+    total_memory: memoryInfo.total,
+    free_memory: memoryInfo.free,
+    process_heap_total: memoryInfo.process_memory.heap_total,
+    cpu_cores: cpuInfo.cores,
+    cpu_architecture: cpuInfo.architecture,
+  };
+};
+
+export const codeExecutionEnvironmentAnalysisTool = createTool({
+  name: "code_execution_environment_analysis",
+  description: "Analyzes the current code execution environment, providing details on runtime versions, relevant environment variables, and system resource limits.",
+  parameters: codeExecutionEnvironmentSchema,
+  execute: async ({ category }: CodeExecutionEnvironmentInput) => {
+    try {
+      logger.debug("[codeExecutionEnvironmentAnalysisTool] Executing environment analysis", { category });
+      let result: any = {};
+
+      switch (category) {
+        case "all":
+          result = {
+            runtime_versions: getRuntimeVersions(),
+            environment_variables: getFilteredEnvironmentVariables(),
+            resource_limits: getResourceLimits(),
+          };
+          break;
+        case "runtime_versions":
+          result = getRuntimeVersions();
+          break;
+        case "environment_variables":
+          result = getFilteredEnvironmentVariables();
+          break;
+        case "resource_limits":
+          result = getResourceLimits();
+          break;
+        default:
+          throw new Error(`Unknown category: ${category}`);
+      }
+
+      logger.info("[codeExecutionEnvironmentAnalysisTool] Environment analysis completed", { category, result });
+      return result;
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown environment analysis error";
+      logger.error("[codeExecutionEnvironmentAnalysisTool] Environment analysis failed", error);
+      throw new Error(`Environment analysis failed: ${errorMessage}`);
     }
   },
 });
