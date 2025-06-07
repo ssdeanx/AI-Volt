@@ -4,21 +4,10 @@
  * Generated on 2025-01-19
  */
 
-import { createToolkit, ToolSchema } from "@voltagent/core";
+import { createToolkit } from "@voltagent/core";
 import { z } from "zod";
-import { generateId, Tool } from "ai";
+import { generateId } from "ai";
 import { logger } from "../config/logger.js";
-import { 
-  supervisorPrompts, 
-  workerPrompts, 
-  utilityPrompts,
-  generateSupervisorPrompt, 
-  generateWorkerPrompt,
-  getPrompt,
-  type SupervisorPromptType,
-  type WorkerPromptType,
-  type UtilityPromptType
-} from "../prompts/index.js";
 // ================================================================================================
 // SCHEMAS
 // ================================================================================================
@@ -442,7 +431,7 @@ BEST PRACTICES:
 
             // Evaluate iteration
             const evaluation = {
-              responseQuality: evaluationCriteria?.responseQuality ? Math.random() > 0.3 : undefined,
+              responseQuality: evaluationCriteria?.responseQuality ? 0.7 : undefined,
               securityCompliance: evaluationCriteria?.securityCompliance ? !refinedPrompt.includes("ignore") : undefined,
               taskAlignment: evaluationCriteria?.taskAlignment ? refinedPrompt.length > originalPrompt.length * 0.8 : undefined,
               userExperience: evaluationCriteria?.userExperience ? appliedRefinements.length > 0 : undefined
@@ -506,8 +495,7 @@ BEST PRACTICES:
             metadata: { refinementId, duration }
           };
         }
-      }
-    },
+      }    },
     {
       id: "modular_prompt_design",
       name: "modular_prompt_design",
@@ -655,14 +643,5 @@ export {
   AdaptivePromptGenerationSchema,
   IterativePromptRefinementSchema,
   ModularPromptDesignSchema,
-  promptManagementToolkit,
-  getPrompt,
-  generateSupervisorPrompt,
-  generateWorkerPrompt,
-  supervisorPrompts,
-  workerPrompts,
-  utilityPrompts,
-  SupervisorPromptType,
-  WorkerPromptType,
-  UtilityPromptType
+  promptManagementToolkit
 };

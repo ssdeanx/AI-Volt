@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Supervisor Agent Configuration
  * Manages and coordinates specialized worker agents using delegation pattern
@@ -19,7 +20,7 @@ import {
   gitAddTool,
   gitCommitTool,
   gitPushTool,
-  gitFetchTool,
+  gitFetchTool, 
   gitPullTool,
   gitMergeTool,
   gitBranchTool,
@@ -53,7 +54,6 @@ import { logger } from "../config/logger.js";
 import { env } from "../config/environment.js";
 import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import { createSupervisorRetriever, type SupervisorRetriever } from "./supervisorRetriever.js";
-import { promptManagementToolkit } from "../tools/promptManagementTools.js";
 import { supervisorPrompts } from "../prompts/index.js";
 import { workerPrompts } from "../prompts/index.js";
 import {
@@ -176,6 +176,7 @@ const createSupervisorHooks = () => createHooks({
   },
 
   onToolStart: async ({ agent, tool, context }: OnToolStartHookArgs) => {
+    logger.debug(`[${agent.name}] Entering onToolStart`, { toolName: tool.name, operationId: context.operationId }); // <-- ADD THIS LINE
     const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
     const delegationId = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID);
     const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
@@ -304,19 +305,46 @@ const createSupervisorHooksWithRetriever = (baseHooks: ReturnType<typeof createH
       
       // Track delegation results in retriever
       if (tool.name === "delegate_task") {
-        const workflowId = context.userContext.get("workflowId") as string;
-        const taskId = context.userContext.get("currentDelegation") as string;
-        
+        const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID) as string;
+        const delegationStartTimeForRetriever = context.userContext.get(CONTEXT_KEYS.CURRENT_DELEGATION) as number || Date.now();
+        const currentDelegationIdForRetriever = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID) as string;
+
         try {
-          // Extract delegation details from tool output
-          const resultStr = typeof output === "string" ? output : JSON.stringify(output);
+          let resultStrForRetriever = "[No output]";
+          if (typeof output !== 'undefined' && output !== null) {
+            if (typeof output === 'string') {
+              resultStrForRetriever = output;
+            } else {
+              try {
+                let meaningfulOutput: any = output; // Ensure meaningfulOutput can be reassigned
+                if (typeof output === 'object') {
+                    if ('value' in output && typeof (output as any).value === 'string') {
+                        meaningfulOutput = (output as any).value;
+                    } else if ('text' in output && typeof (output as any).text === 'string') {
+                        meaningfulOutput = (output as any).text;
+                    } else if (typeof (output as any).type === 'string' && (output as any).type === 'tool-result' &&
+                               (output as any).toolResult && typeof (output as any).toolResult.result !== 'undefined') {
+                        meaningfulOutput = (output as any).toolResult.result;
+                    }
+                }
+                resultStrForRetriever = JSON.stringify(meaningfulOutput);
+              } catch (stringifyError) {
+                logger.warn(`[${agent.name}] Failed to stringify delegation output for retriever context`, {
+                  sessionId: context.userContext.get(CONTEXT_KEYS.SESSION_ID),
+                  delegationId: currentDelegationIdForRetriever,
+                  toolName: tool.name,
+                  error: stringifyError instanceof Error ? stringifyError.message : String(stringifyError)
+                });
+                resultStrForRetriever = "[Unserializable Object]";
+              }
+            }
+          }
+
           const success = !error;
-          
-          // Try to determine which agent was used
           let agentType = "unknown";
-          const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding'];
+          const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding', 'promptManager', 'debug', 'research', 'knowledgeBase', 'data', 'cloud'];
           for (const type of agentTypes) {
-            if (resultStr.toLowerCase().includes(type)) {
+            if (resultStrForRetriever.toLowerCase().includes(type)) {
               agentType = type;
               break;
             }
@@ -325,24 +353,26 @@ const createSupervisorHooksWithRetriever = (baseHooks: ReturnType<typeof createH
           retriever.addDelegationContext({
             agentType,
             task: "Delegated task via delegate_task tool",
-            result: resultStr.substring(0, 500), // Limit length
-            taskId,
+            result: resultStrForRetriever.substring(0, 500),
+            taskId: currentDelegationIdForRetriever, 
             workflowId,
             success,
-            duration: Date.now() - (context.userContext.get("currentDelegation") as number || Date.now())
+            duration: Date.now() - delegationStartTimeForRetriever
           });
           
           logger.debug("Delegation result added to retriever", {
             agentType,
             success,
-            taskId,
+            taskId: currentDelegationIdForRetriever,
             workflowId
           });
           
         } catch (retrievalError) {
           logger.warn("Failed to add delegation context to retriever", {
             error: retrievalError instanceof Error ? retrievalError.message : String(retrievalError),
-            toolName: tool.name
+            toolName: tool.name,
+            sessionId: context.userContext.get(CONTEXT_KEYS.SESSION_ID),
+            delegationId: currentDelegationIdForRetriever,
           });
         }
       }
@@ -395,7 +425,7 @@ const createSupervisorMemory = () => {
  * Create and configure the supervisor agent
  */
 export const createSupervisorAgent = async () => {
-  logger.info("Creating AI-Volt supervisor agent", {
+  logger.info("Creating Supervisor agent", {
     model: "gemini-2.5-flash-preview-05-20",
     role: "supervisor",
     environment: env.NODE_ENV
@@ -438,7 +468,6 @@ export const createSupervisorAgent = async () => {
       },
       tools: [
         reasoningToolkit,
-        promptManagementToolkit,
         calculatorTool,
         dateTimeTool,
         systemInfoTool,
@@ -941,11 +970,40 @@ function handleDelegationEnd({ agent, tool, output, error, context }: OnToolEndH
   const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
   const delegationId = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID);
   const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
-  const activeDelegations = context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any> || new Map();
-  if (env.NODE_ENV === 'development') { console.debug('Active delegations:', activeDelegations.size); }
   const delegationStartTime = context.userContext.get(CONTEXT_KEYS.CURRENT_DELEGATION) as number;
   const delegationDuration = delegationStartTime ? Date.now() - delegationStartTime : 0;
   
+  let resultPreviewStr = "[No output]";
+  if (typeof output !== 'undefined' && output !== null) {
+    if (typeof output === 'string') {
+      resultPreviewStr = output.substring(0, 100);
+    } else {
+      try {
+        let meaningfulOutput: any = output; // Ensure meaningfulOutput can be reassigned
+        if (typeof output === 'object') {
+            if ('value' in output && typeof (output as any).value === 'string') {
+                meaningfulOutput = (output as any).value;
+            } else if ('text' in output && typeof (output as any).text === 'string') {
+                meaningfulOutput = (output as any).text;
+            } else if (typeof (output as any).type === 'string' && (output as any).type === 'tool-result' && 
+                       (output as any).toolResult && typeof (output as any).toolResult.result !== 'undefined') {
+                meaningfulOutput = (output as any).toolResult.result;
+            }
+        }
+        const stringifiedOutput = JSON.stringify(meaningfulOutput);
+        resultPreviewStr = stringifiedOutput.substring(0, 100);
+      } catch (stringifyError) {
+        logger.warn(`[${agent.name}] Failed to stringify delegation output for preview`, {
+          sessionId,
+          delegationId,
+          toolName: tool.name,
+          error: stringifyError instanceof Error ? stringifyError.message : String(stringifyError)
+        });
+        resultPreviewStr = "[Unserializable Object]";
+      }
+    }
+  }
+
   if (error) {
     logger.error(`[${agent.name}] Task delegation failed`, {
       sessionId,
@@ -964,7 +1022,7 @@ function handleDelegationEnd({ agent, tool, output, error, context }: OnToolEndH
       operationId: context.operationId,
       toolName: tool.name,
       duration: delegationDuration,
-      resultPreview: typeof output === 'string' ? output.substring(0, 100) : JSON.stringify(output).substring(0, 100),
+      resultPreview: resultPreviewStr,
     });
   }
 }
