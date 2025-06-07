@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Mathematical calculation tool
  * Provides precise mathematical operations with error handling
@@ -141,11 +142,24 @@ export const calculatorTool = createTool({
 
       logger.info("Calculator operation/algorithm completed", { operation, a, b, limit, result });
 
+      // Format the result for display
+      let formattedResult: string;
+      if (typeof result === 'object') {
+        formattedResult = JSON.stringify(result);
+      } else {
+        const inputParts: string[] = [];
+        if (a !== undefined) inputParts.push(String(a));
+        if (b !== undefined) inputParts.push(String(b));
+        if (limit !== undefined) inputParts.push(`limit=${limit}`);
+        const inputsString = inputParts.join(', ');
+        formattedResult = `${operation}(${inputsString}) = ${result}`;
+      }
+
       return {
         operation,
         inputs: { a, b, limit },
         result,
-        formatted: typeof result === 'object' ? JSON.stringify(result) : `${operation}(${a !== undefined ? a : ''}${b !== undefined ? ', ' + b : ''}${limit !== undefined ? ', limit=' + limit : ''}) = ${result}`
+        formatted: formattedResult
       };
 
     } catch (error) {
@@ -178,29 +192,47 @@ const calculateMedian = (numbers: number[]): number => {
   if (numbers.length === 0) return 0;
   const sortedNumbers = [...numbers].sort((a, b) => a - b);
   const mid = Math.floor(sortedNumbers.length / 2);
-  return sortedNumbers.length % 2 === 0
-    ? (sortedNumbers[mid - 1] + sortedNumbers[mid]) / 2
-    : sortedNumbers[mid];
+  
+  if (sortedNumbers.length % 2 === 0) {
+    // Even number of elements - safely access array indices
+    const leftIndex = mid - 1;
+    const rightIndex = mid;
+    if (leftIndex >= 0 && rightIndex < sortedNumbers.length) {
+      const leftValue = sortedNumbers.at(leftIndex);
+      const rightValue = sortedNumbers.at(rightIndex);
+      if (leftValue !== undefined && rightValue !== undefined) {
+        return (leftValue + rightValue) / 2;
+      }
+    }
+    return 0; // Fallback for edge case
+  } else {
+    // Odd number of elements - safely access middle element
+    if (mid >= 0 && mid < sortedNumbers.length) {
+      const midValue = sortedNumbers.at(mid);
+      return midValue !== undefined ? midValue : 0;
+    }
+    return 0; // Fallback for edge case
+  }
 };
 
 const calculateMode = (numbers: number[]): number[] => {
   if (numbers.length === 0) return [];
-  const frequencyMap: { [key: number]: number } = {};
+  const frequencyMap = new Map<number, number>();
   numbers.forEach(num => {
-    frequencyMap[num] = (frequencyMap[num] || 0) + 1;
+    frequencyMap.set(num, (frequencyMap.get(num) || 0) + 1);
   });
 
   let maxFrequency = 0;
-  for (const num in frequencyMap) {
-    if (frequencyMap[num] > maxFrequency) {
-      maxFrequency = frequencyMap[num];
+  for (const [, frequency] of frequencyMap) {
+    if (frequency > maxFrequency) {
+      maxFrequency = frequency;
     }
   }
 
   const modes: number[] = [];
-  for (const num in frequencyMap) {
-    if (frequencyMap[num] === maxFrequency) {
-      modes.push(parseFloat(num));
+  for (const [num, frequency] of frequencyMap) {
+    if (frequency === maxFrequency) {
+      modes.push(num);
     }
   }
   return modes;

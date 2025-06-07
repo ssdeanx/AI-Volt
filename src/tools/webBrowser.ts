@@ -177,10 +177,10 @@ const extractJsonLdTool = createTool({
           logger.warn("[extractJsonLdTool] JSON-LD parse error", { url, error: (err as Error).message });
         }
       });
-      return { url, jsonLd };
-    } catch (err) {
-      logger.error("[extractJsonLdTool] Error", { url, error: (err as Error).message });
-      throw err;
+      return { url, jsonLd };    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logger.error("[extractJsonLdTool] Error", { url, error: errorMessage });
+      throw new Error(`JSON-LD extraction failed: ${errorMessage}`);
     }
   }
 });

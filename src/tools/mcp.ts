@@ -114,9 +114,9 @@ const initializeAndFetchMcpTools = async (): Promise<Tool[]> => {
       tools: tools.map(tool => (tool as any).name || 'unknown_tool_name') // Handle cases where tool might not have a name property as expected by Tool type
     });
     
-    return tools;
-  } catch (error) {
-    logger.error("Failed to initialize MCP tools in mcp.ts module", error);
+    return tools;  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error("Failed to initialize MCP tools in mcp.ts module", { error: errorMessage });
     return []; // Return an empty array on failure to prevent downstream errors
   }
 };

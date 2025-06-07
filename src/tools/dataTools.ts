@@ -27,10 +27,10 @@ export const readDataFromFileTool = createTool({
       }
       const content = shell.cat(args.filePath).toString();
       logger.info(`Successfully read data from file: ${args.filePath}`);
-      return content;
-    } catch (error) {
-      logger.error(`Failed to read data from file ${args.filePath}: ${error}`);
-      throw new Error(`Failed to read data from file ${args.filePath}: ${error}`);
+      return content;    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to read data from file ${args.filePath}: ${errorMessage}`);
+      throw new Error(`Failed to read data from file ${args.filePath}: ${errorMessage}`);
     }
   },
 });
@@ -100,10 +100,10 @@ export const analyzeCsvDataTool = createTool({
     try {
       const result = await context.eval(script, { timeout: 5000 });
       logger.info(`Successfully analyzed CSV data using isolated-vm.`);
-      return result;
-    } catch (error) {
-      logger.error(`Failed to analyze CSV data in isolated-vm: ${error}`);
-      throw new Error(`Failed to analyze CSV data in isolated-vm: ${error}`);
+      return result;    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to analyze CSV data in isolated-vm: ${errorMessage}`);
+      throw new Error(`Failed to analyze CSV data in isolated-vm: ${errorMessage}`);
     } finally {
       isolate.dispose();
     }
@@ -125,10 +125,10 @@ export const writeDataToFileTool = createTool({
     try {
       shell.ShellString(args.content).to(args.filePath);
       logger.info(`Successfully wrote data to file: ${args.filePath}`);
-      return `Data successfully written to ${args.filePath}.`;
-    } catch (error) {
-      logger.error(`Failed to write data to file ${args.filePath}: ${error}`);
-      throw new Error(`Failed to write data to file ${args.filePath}: ${error}`);
+      return `Data successfully written to ${args.filePath}.`;    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to write data to file ${args.filePath}: ${errorMessage}`);
+      throw new Error(`Failed to write data to file ${args.filePath}: ${errorMessage}`);
     }
   },
 });
@@ -163,10 +163,10 @@ export const checksumFileTool = createTool({
 
       const checksum = result.stdout.split('\n')[1] ? result.stdout.split('\n')[1].trim() : result.stdout.trim().split(' ')[0];
       logger.info(`Checksum for ${args.filePath}: ${checksum}`);
-      return `MD5 Checksum for ${args.filePath}: ${checksum}`;
-    } catch (error) {
-      logger.error(`Failed to calculate checksum for ${args.filePath}: ${error}`);
-      throw new Error(`Failed to calculate checksum for ${args.filePath}: ${error}`);
+      return `MD5 Checksum for ${args.filePath}: ${checksum}`;    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to calculate checksum for ${args.filePath}: ${errorMessage}`);
+      throw new Error(`Failed to calculate checksum for ${args.filePath}: ${errorMessage}`);
     }
   },
 });
@@ -203,10 +203,10 @@ export const compressFileTool = createTool({
       }
 
       logger.info(`Successfully compressed ${args.inputPath} to ${outputPath}.`);
-      return `Successfully compressed ${args.inputPath} to ${outputPath}.`;
-    } catch (error) {
-      logger.error(`Failed to compress ${args.inputPath}: ${error}`);
-      throw new Error(`Failed to compress ${args.inputPath}: ${error}`);
+      return `Successfully compressed ${args.inputPath} to ${outputPath}.`;    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to compress ${args.inputPath}: ${errorMessage}`);
+      throw new Error(`Failed to compress ${args.inputPath}: ${errorMessage}`);
     }
   },
 });
@@ -243,10 +243,10 @@ export const decompressFileTool = createTool({
       }
 
       logger.info(`Successfully decompressed ${args.inputPath} to ${args.outputPath}.`);
-      return `Successfully decompressed ${args.inputPath} to ${args.outputPath}.`;
-    } catch (error) {
-      logger.error(`Failed to decompress ${args.inputPath}: ${error}`);
-      throw new Error(`Failed to decompress ${args.inputPath}: ${error}`);
+      return `Successfully decompressed ${args.inputPath} to ${args.outputPath}.`;    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to decompress ${args.inputPath}: ${errorMessage}`);
+      throw new Error(`Failed to decompress ${args.inputPath}: ${errorMessage}`);
     }
   },
 });
@@ -282,10 +282,10 @@ export const findInFileTool = createTool({
         return `No matches found for pattern "${args.pattern}" in ${args.filePath}.`;
       } else {
         throw new Error(`Failed to search file: ${result.stderr}`);
-      }
-    } catch (error) {
-      logger.error(`Failed to search file ${args.filePath}: ${error}`);
-      throw new Error(`Failed to search file ${args.filePath}: ${error}`);
+      }    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to search file ${args.filePath}: ${errorMessage}`);
+      throw new Error(`Failed to search file ${args.filePath}: ${errorMessage}`);
     }
   },
 }); 

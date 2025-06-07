@@ -39,10 +39,10 @@ const gitStatusTool = createTool({
         conflicted: status.conflicted,
         not_added: status.not_added,
         isClean: status.isClean(),
-      };
-    } catch (error) {
-      logger.error('[gitStatusTool] Failed to get status', { path, error: (error as Error).message });
-      throw new Error(`Git status failed: ${(error as Error).message}`);
+      };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitStatusTool] Failed to get status', { path, error: errorMessage });
+      throw new Error(`Git status failed: ${errorMessage}`);
     }
   }
 });
@@ -62,10 +62,10 @@ const gitAddTool = createTool({
     logger.info('[gitAddTool] Adding files to staging', { files });
     try {
       const result = await git.add(files);
-      return { files, result };
-    } catch (error) {
-      logger.error('[gitAddTool] Failed to add files', { files, error: (error as Error).message });
-      throw new Error(`Git add failed: ${(error as Error).message}`);
+      return { files, result };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitAddTool] Failed to add files', { files, error: errorMessage });
+      throw new Error(`Git add failed: ${errorMessage}`);
     }
   }
 });
@@ -91,10 +91,10 @@ const gitCommitTool = createTool({
         summary: result.summary,
         branch: result.branch,
         root: result.root,
-      };
-    } catch (error) {
-      logger.error('[gitCommitTool] Failed to commit', { message, files, error: (error as Error).message });
-      throw new Error(`Git commit failed: ${(error as Error).message}`);
+      };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitCommitTool] Failed to commit', { message, files, error: errorMessage });
+      throw new Error(`Git commit failed: ${errorMessage}`);
     }
   }
 });
@@ -117,10 +117,10 @@ const gitPushTool = createTool({
     try {
       const options = force ? ['--force'] : [];
       const result = await git.push(remote, branch, options);
-      return { remote, branch, force, result };
-    } catch (error) {
-      logger.error('[gitPushTool] Failed to push', { remote, branch, force, error: (error as Error).message });
-      throw new Error(`Git push failed: ${(error as Error).message}`);
+      return { remote, branch, force, result };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitPushTool] Failed to push', { remote, branch, force, error: errorMessage });
+      throw new Error(`Git push failed: ${errorMessage}`);
     }
   }
 });
@@ -148,10 +148,10 @@ const gitPullTool = createTool({
         files: result.files,
         insertions: result.insertions,
         deletions: result.deletions,
-      };
-    } catch (error) {
-      logger.error('[gitPullTool] Failed to pull', { remote, branch, error: (error as Error).message });
-      throw new Error(`Git pull failed: ${(error as Error).message}`);
+      };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitPullTool] Failed to pull', { remote, branch, error: errorMessage });
+      throw new Error(`Git pull failed: ${errorMessage}`);
     }
   }
 });
@@ -199,10 +199,10 @@ const gitBranchTool = createTool({
         
         default:
           throw new Error(`Unknown branch action: ${action}`);
-      }
-    } catch (error) {
-      logger.error('[gitBranchTool] Branch action failed', { action, branchName, force, error: (error as Error).message });
-      throw new Error(`Git branch ${action} failed: ${(error as Error).message}`);
+      }    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitBranchTool] Branch action failed', { action, branchName, force, error: errorMessage });
+      throw new Error(`Git branch ${action} failed: ${errorMessage}`);
     }
   }
 });
@@ -239,10 +239,10 @@ const gitLogTool = createTool({
           author_name: commit.author_name,
           author_email: commit.author_email,
         })),
-      };
-    } catch (error) {
-      logger.error('[gitLogTool] Failed to get log', { maxCount, oneline, graph, error: (error as Error).message });
-      throw new Error(`Git log failed: ${(error as Error).message}`);
+      };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitLogTool] Failed to get log', { maxCount, oneline, graph, error: errorMessage });
+      throw new Error(`Git log failed: ${errorMessage}`);
     }
   }
 });
@@ -267,10 +267,10 @@ const gitDiffTool = createTool({
       if (file) options.push(file);
       
       const diff = await git.diff(options);
-      return { staged, file, diff };
-    } catch (error) {
-      logger.error('[gitDiffTool] Failed to get diff', { staged, file, error: (error as Error).message });
-      throw new Error(`Git diff failed: ${(error as Error).message}`);
+      return { staged, file, diff };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitDiffTool] Failed to get diff', { staged, file, error: errorMessage });
+      throw new Error(`Git diff failed: ${errorMessage}`);
     }
   }
 });
@@ -292,10 +292,10 @@ const gitMergeTool = createTool({
     try {
       const options = noFastForward ? ['--no-ff'] : [];
       const result = await git.merge([branch, ...options]);
-      return { branch, noFastForward, result };
-    } catch (error) {
-      logger.error('[gitMergeTool] Failed to merge', { branch, noFastForward, error: (error as Error).message });
-      throw new Error(`Git merge failed: ${(error as Error).message}`);
+      return { branch, noFastForward, result };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitMergeTool] Failed to merge', { branch, noFastForward, error: errorMessage });
+      throw new Error(`Git merge failed: ${errorMessage}`);
     }
   }
 });
@@ -316,10 +316,10 @@ const gitResetTool = createTool({
     logger.info('[gitResetTool] Resetting', { mode, target });
     try {
       const result = await git.reset([`--${mode}`, target]);
-      return { mode, target, result };
-    } catch (error) {
-      logger.error('[gitResetTool] Failed to reset', { mode, target, error: (error as Error).message });
-      throw new Error(`Git reset failed: ${(error as Error).message}`);
+      return { mode, target, result };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitResetTool] Failed to reset', { mode, target, error: errorMessage });
+      throw new Error(`Git reset failed: ${errorMessage}`);
     }
   }
 });
@@ -339,10 +339,10 @@ const gitTool = createTool({
     logger.info('[gitTool] Executing Git command', { args });
     try {
       const result = await git.raw(args);
-      return { args, result };
-    } catch (error) {
-      logger.error('[gitTool] Git command failed', { args, error: (error as Error).message });
-      throw new Error(`Git command failed: ${(error as Error).message}`);
+      return { args, result };    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitTool] Git command failed', { args, error: errorMessage });
+      throw new Error(`Git command failed: ${errorMessage}`);
     }
   }
 });

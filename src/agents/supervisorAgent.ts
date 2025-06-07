@@ -472,7 +472,7 @@ export const createSupervisorAgent = async () => {
         dateTimeTool,
         systemInfoTool,
         webSearchTool,
-        retriever.tool,                // <— now a selectable tool with caching
+//        retriever.tool,                // <— now a selectable tool with caching
         fetchRepoStarsTool,
         fetchRepoContributorsTool,
       ],
@@ -796,7 +796,6 @@ export const createWorkerAgents = async () => {
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 1024,},} satisfies GoogleGenerativeAIProviderOptions,},
       tools: [
         promptManagerToolkit,
-        reasoningToolkit, // For complex prompt analysis
         calculatorTool, // For scoring and metrics
         webSearchTool, // For researching latest techniques
       ],

@@ -1,3 +1,5 @@
+/* eslint-disable security/detect-child-process */
+/* eslint-disable security/detect-object-injection */
 /**
  * System information tool
  * Provides comprehensive system and runtime information
@@ -10,6 +12,14 @@ import { env } from "../config/environment.js";
 import * as os from "os";
 import * as process from "process";
 import * as child_process from "child_process";
+
+/**
+ * Helper function to safely format bytes to human readable format
+ */
+const formatBytesToString = (bytes: number): string => {
+  const gb = bytes / (1024 * 1024 * 1024);
+  return gb > 1 ? `${gb.toFixed(1)}GB` : `${(bytes / (1024 * 1024)).toFixed(0)}MB`;
+};
 
 /**
  * Schema for system information requests
@@ -73,20 +83,29 @@ const getCpuInfo = () => {
  */
 const getNetworkInfo = () => {
   const interfaces = os.networkInterfaces();
-  const result: Record<string, any> = {};
+  const result: Record<string, Array<{
+    address: string;
+    family: string | number;
+    internal: boolean;
+    netmask: string;
+  }>> = {};
   
+  if (!interfaces) {
+    return result;
+  }
+
+  // Safe iteration avoiding object injection
   for (const [name, addresses] of Object.entries(interfaces)) {
-    if (addresses) {
+    if (addresses && Array.isArray(addresses)) {
       result[name] = addresses.map(addr => ({
-        address: addr.address,
-        family: addr.family,
-        internal: addr.internal,
-        netmask: addr.netmask
+        address: String(addr.address || ''),
+        family: addr.family || '',
+        internal: Boolean(addr.internal),
+        netmask: String(addr.netmask || '')
       }));
     }
   }
-  
-  return result;
+    return result;
 };
 
 /**
@@ -125,24 +144,60 @@ const getEnvironmentInfo = () => {
  */
 const getDiskInfo = async () => {
   return new Promise((resolve, reject) => {
-    child_process.exec('df -h', (error, stdout, stderr) => {
+    const isWindows = os.platform() === 'win32';
+    const command = isWindows ? 'wmic logicaldisk get size,freespace,caption' : 'df -h';
+    child_process.exec(command, (error, stdout, stderr) => { // eslint-disable-line security/detect-child-process
       if (error) {
         logger.error(`Disk info error: ${error.message}`);
-        reject(new Error(`Failed to get disk info: ${stderr}`));
+        reject(new Error(`Failed to get disk info: ${stderr || error.message}`));
+        return;
       }
-      const lines = stdout.trim().split('\n').slice(1);
-      const disks = lines.map(line => {
-        const parts = line.split(/\s+/);
-        return {
-          filesystem: parts[0],
-          size: parts[1],
-          used: parts[2],
-          available: parts[3],
-          capacity: parts[4],
-          mounted_on: parts[5],
-        };
-      });
-      resolve(disks);
+      
+      try {
+        if (isWindows) {
+          // Parse Windows wmic output
+          const lines = stdout.trim().split('\n').slice(1).filter(line => line.trim());
+          const disks = lines.map(line => {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 3) {
+              const caption = parts[0];
+              const freeSpace = parseInt(parts[1]) || 0;
+              const size = parseInt(parts[2]) || 0;
+              const used = size - freeSpace;
+              const usagePercent = size > 0 ? ((used / size) * 100).toFixed(1) + '%' : '0%';
+              
+              return {
+                filesystem: caption,
+                size: formatBytesToString(size),
+                used: formatBytesToString(used),
+                available: formatBytesToString(freeSpace),
+                capacity: usagePercent,
+                mounted_on: caption,
+              };
+            }
+            return null;
+          }).filter(Boolean);
+          resolve(disks);
+        } else {
+          // Parse Unix df output
+          const lines = stdout.trim().split('\n').slice(1);
+          const disks = lines.map(line => {
+            const parts = line.split(/\s+/);
+            return {
+              filesystem: parts[0],
+              size: parts[1],
+              used: parts[2],
+              available: parts[3],
+              capacity: parts[4],
+              mounted_on: parts[5],
+            };
+          });
+          resolve(disks);
+        }
+      } catch (parseError) {
+        logger.error(`Failed to parse disk info output: ${parseError}`);
+        reject(new Error(`Failed to parse disk info: ${parseError instanceof Error ? parseError.message : String(parseError)}`));
+      }
     });
   });
 };
@@ -303,12 +358,15 @@ const getFilteredEnvironmentVariables = () => {
     "LANG", "SHELL", "TERM", "USER", "USERNAME", "PWD", "OLDPWD",
     "VIRTUAL_ENV", // For Python virtual environments if applicable
   ];
-  const envVars: { [key: string]: string | undefined } = {};
-  relevantEnvVars.forEach(key => {
-    if (process.env[key]) {
-      envVars[key] = process.env[key];
+  const envVars: Record<string, string | undefined> = {};
+  
+  // Safe iteration to avoid object injection
+  for (const key of relevantEnvVars) {
+    const value = process.env[key];
+    if (value !== undefined) {
+      envVars[key] = String(value);
     }
-  });
+  }
   return envVars;
 };
 

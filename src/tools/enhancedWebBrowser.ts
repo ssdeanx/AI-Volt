@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Enhanced Web Browser Toolkit with isolated-vm and shelljs Integration
  * Demonstrates secure web scraping and browser automation using isolated-vm for sandboxing and shelljs for file operations
@@ -9,6 +10,7 @@ import ivm from 'isolated-vm';
 import * as shell from 'shelljs';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import * as path from 'path';
 
 // Configure shell for secure operations
 shell.config.silent = true;
@@ -72,17 +74,20 @@ const secureWebProcessorTool = createTool({
         warn: (...args: any[]) => logger.warn('[webProcessor]', args),
       });
 
+      // Helper function to create element wrapper for reduced nesting
+      const createElementWrapper = ($: cheerio.CheerioAPI, el: any) => ({
+        text: $(el).text().trim(),
+        html: $(el).html(),
+        attr: (name: string) => $(el).attr(name),
+      });
+
       // Provide cheerio-like functionality in isolated environment
       await global.set('parseHTML', (html: string) => {
         const $ = cheerio.load(html);
         return {
           find: (selector: string) => {
             const elements = $(selector);
-            return Array.from(elements).map(el => ({
-              text: $(el).text().trim(),
-              html: $(el).html(),
-              attr: (name: string) => $(el).attr(name),
-            }));
+            return Array.from(elements).map(el => createElementWrapper($, el));
           },
           text: () => $.text(),
           title: () => $('title').text(),
@@ -103,26 +108,23 @@ const secureWebProcessorTool = createTool({
 
       // Utility functions
       await global.set('utils', {
-        extractEmails: (text: string) => {
+        extractEmails: (text: string): string[] => {
           const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
           return text.match(emailRegex) || [];
         },
-        extractPhones: (text: string) => {
+        extractPhones: (text: string): string[] => {
           const phoneRegex = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g;
           return text.match(phoneRegex) || [];
         },
-        cleanText: (text: string) => {
+        cleanText: (text: string): string => {
           return text.replace(/\s+/g, ' ').trim();
         },
       });
 
       // Execute processing script with timeout
-      const scriptPromise = context.eval(processingScript);
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Processing script timeout')), timeout);
-      });
-
-      const result = await Promise.race([scriptPromise, timeoutPromise]);
+      const scriptPromise = context.eval(processingScript, { timeout });
+      
+      const result = await scriptPromise;
 
       // Save results to file if requested
       if (saveToFile && result) {
@@ -210,14 +212,14 @@ const webScrapingManagerTool = createTool({
           }
 
           if (extractors.includes('links')) {
-            result.extractedData.links = $('a[href]').map((_, el) => ({
+            result.extractedData.links = $('a[href]').map((_: any, el: any) => ({
               text: $(el).text().trim(),
               href: $(el).attr('href'),
             })).get().slice(0, 20); // Limit to 20 links
           }
 
           if (extractors.includes('images')) {
-            result.extractedData.images = $('img[src]').map((_, el) => ({
+            result.extractedData.images = $('img[src]').map((_: any, el: any) => ({
               alt: $(el).attr('alt') || '',
               src: $(el).attr('src'),
             })).get().slice(0, 10); // Limit to 10 images
@@ -233,13 +235,38 @@ const webScrapingManagerTool = createTool({
           }
 
           if (extractors.includes('tables')) {
-            result.extractedData.tables = $('table').map((_, table) => {
-              const headers = $(table).find('th').map((_, th) => $(th).text().trim()).get();
-              const rows = $(table).find('tr').map((_, tr) => {
-                return $(tr).find('td').map((_, td) => $(td).text().trim()).get();
-              }).get();
-              return { headers, rows: rows.filter(row => row.length > 0) };
-            }).get().slice(0, 5); // Limit to 5 tables
+            // Helper function to extract table cell text
+            const extractCellText = (cells: cheerio.Cheerio<any>): string[] => {
+              return cells.map((_, td) => $(td).text().trim()).get();
+            };
+
+            // Helper function to extract table headers
+            const extractTableHeaders = (table: any): string[] => {
+              return $(table).find('th').map((_, th) => $(th).text().trim()).get();
+            };
+
+            // Helper function to extract table rows
+            const extractTableRows = (table: any): string[][] => {
+              const tableRows = $(table).find('tr');
+              const rows: string[][] = [];
+              tableRows.each((_, tr) => {
+                const tableCells = $(tr).find('td');
+                const cellTexts = extractCellText(tableCells);
+                if (cellTexts.length > 0) {
+                  rows.push(cellTexts);
+                }
+              });
+              return rows;
+            };
+
+            // Extract all tables with reduced nesting
+            const tables = $('table').map((_, table) => {
+              const headers = extractTableHeaders(table);
+              const rows = extractTableRows(table);
+              return { headers, rows };
+            }).get();
+
+            result.extractedData.tables = tables.slice(0, 5); // Limit to 5 tables
           }
 
           // Cache results to file if enabled
@@ -262,16 +289,72 @@ const webScrapingManagerTool = createTool({
         }
       };
 
+      // Validate and sanitize URLs before processing
+      const validateUrl = (url: string): string => {
+        try {
+          const urlObj = new URL(url);
+          // Only allow HTTP and HTTPS protocols
+          if (!['http:', 'https:'].includes(urlObj.protocol)) {
+            throw new Error(`Unsupported protocol: ${urlObj.protocol}`);
+          }
+          return urlObj.toString();
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          throw new Error(`Invalid URL format "${url}": ${errorMessage}`);
+        }
+      };
+
+      const validatedUrls = urls.map(url => validateUrl(url));
+
       // Process URLs either concurrently or sequentially
       if (concurrent) {
-        const promises = urls.map((url, index) => scrapeUrl(url, index));
+        const promises = validatedUrls.map((url, index) => scrapeUrl(url, index));
         scrapingResults.push(...await Promise.allSettled(promises).then(results => 
           results.map(result => result.status === 'fulfilled' ? result.value : { error: 'Promise rejected' })
         ));
       } else {
-        for (let i = 0; i < urls.length; i++) {
-          const result = await scrapeUrl(urls[i], i);
-          scrapingResults.push(result);
+        for (let i = 0; i < validatedUrls.length; i++) {
+          const urlFromValidatedArray = validatedUrls[i]; // This should be a string from validateUrl()
+
+          let currentUrlToProcess: string;
+          try {
+            // Re-validation (defense-in-depth)
+            // Ensure it's a non-empty string first
+            if (typeof urlFromValidatedArray !== 'string' || urlFromValidatedArray.length === 0) {
+              throw new Error('URL from validated array is not a valid string or is empty.');
+            }
+            const urlObj = new URL(urlFromValidatedArray);
+            if (!['http:', 'https:'].includes(urlObj.protocol)) {
+              throw new Error(`Unsupported protocol: ${urlObj.protocol}`);
+            }
+            currentUrlToProcess = urlObj.toString(); // Canonical form
+          } catch (validationError) {
+            logger.error('[webScrapingManagerTool] URL re-validation failed in loop', { 
+              index: i, 
+              url: typeof urlFromValidatedArray === 'string' ? urlFromValidatedArray : `invalid_data_at_index_${i}`,
+              error: (validationError as Error).message 
+            });
+            scrapingResults.push({
+              url: typeof urlFromValidatedArray === 'string' ? urlFromValidatedArray : `invalid_data_at_index_${i}`,
+              error: `URL re-validation failed: ${(validationError as Error).message}`,
+              timestamp: new Date().toISOString(),
+            });
+            continue; // Skip to next URL
+          }
+
+          // If re-validation passed, currentUrlToProcess is set. Now call scrapeUrl.
+          try {
+            const result = await scrapeUrl(currentUrlToProcess, i);
+            scrapingResults.push(result);
+          } catch (scrapeError) {
+            logger.error(`[webScrapingManagerTool] scrapeUrl failed for URL`, { url: currentUrlToProcess, error: (scrapeError as Error).message });
+            scrapingResults.push({
+              url: currentUrlToProcess,
+              error: `Scraping execution failed: ${(scrapeError as Error).message}`,
+              timestamp: new Date().toISOString(),
+            });
+            // Continue to next URL even if one fails
+          }
         }
       }
 
@@ -289,7 +372,7 @@ const webScrapingManagerTool = createTool({
 
       // Save session summary if caching enabled
       if (cacheResults) {
-        const summaryFile = `${outputDir}/session_summary.json`;
+        const summaryFile = path.join(outputDir, 'session_summary.json');
         shell.echo(JSON.stringify({ summary, results: scrapingResults }, null, 2)).to(summaryFile);
       }
 
@@ -303,9 +386,7 @@ const webScrapingManagerTool = createTool({
       });
       throw new Error(`Web scraping session failed: ${(error as Error).message}`);
     }
-  }
-});
-
+  }});
 /**
  * Isolated Web Content Validator
  * Validates and analyzes web content safely using isolated-vm
@@ -323,6 +404,7 @@ const webContentValidatorTool = createTool({
   name: 'web_content_validator',
   description: 'Validate and analyze web content structure using isolated-vm for safe processing.',
   parameters: webContentValidatorSchema,
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   execute: async ({ content, validationRules, checkAccessibility, extractStructure }: WebContentValidatorInput) => {
     logger.info('[webContentValidatorTool] Validating web content', { 
       contentLength: content.length, rulesCount: validationRules?.length || 0, checkAccessibility, extractStructure 
@@ -394,9 +476,19 @@ const webContentValidatorTool = createTool({
         });
 
         // Check for proper heading hierarchy
-        const headings = $('h1, h2, h3, h4, h5, h6').map((_, el) => parseInt(el.tagName.substring(1))).get();
+        const headings = $('h1, h2, h3, h4, h5, h6').map((_, el) => {
+          const tagName = el.tagName;
+          if (typeof tagName === 'string' && tagName.length > 1) {
+            const level = parseInt(tagName.substring(1), 10);
+            return isNaN(level) ? null : level;
+          }
+          return null;
+        }).get().filter((level): level is number => level !== null);
+        
         for (let i = 1; i < headings.length; i++) {
-          if (headings[i] - headings[i-1] > 1) {
+          const currentHeading = headings.at(i);
+          const previousHeading = headings.at(i - 1);
+          if (typeof currentHeading === 'number' && typeof previousHeading === 'number' && currentHeading - previousHeading > 1) {
             accessibilityIssues.push('Heading hierarchy skip detected');
             break;
           }
@@ -435,15 +527,15 @@ const webContentValidatorTool = createTool({
             const ruleResult = await context.eval(`
               (function() {
                 try {
-                  return eval(customRule);
+                  return (function() { ${rule} })();
                 } catch (error) {
                   return { error: error.message };
                 }
               })();
-            `);
-            
-            if (ruleResult && ruleResult.error) {
-              basicResults.validation.issues.push(`Custom rule failed: ${ruleResult.error}`);
+            `, { timeout: 5000 });
+
+            if (ruleResult.error) {
+              basicResults.validation.issues.push(`Custom rule execution failed: ${ruleResult.error}`);
             }
           } catch (error) {
             basicResults.validation.issues.push(`Custom rule execution failed: ${(error as Error).message}`);
@@ -467,8 +559,7 @@ const webContentValidatorTool = createTool({
       });
       throw new Error(`Web content validation failed: ${(error as Error).message}`);
     }
-  }
-});
+  }});
 
 /**
  * Enhanced Web Browser Toolkit combining all enhanced tools

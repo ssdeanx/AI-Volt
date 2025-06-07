@@ -177,8 +177,9 @@ export const analyzeCodeComplexityTool = createTool({
       const results = await complexity.calculate(tmpFile);
       return { success: true, complexity: results };
     } catch (error) {
-      logger.error('[analyzeCodeComplexityTool] Failed', { error });
-      return { success: false, error: 'Failed to analyze code complexity.' };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[analyzeCodeComplexityTool] Failed', { error: errorMessage });
+      return { success: false, error: `Failed to analyze code complexity: ${errorMessage}` };
     } finally {
       shell.rm(tmpFile);
       if (shell.error()) console.error(`Error removing temp file: ${shell.error()}`);
