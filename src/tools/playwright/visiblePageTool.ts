@@ -10,6 +10,21 @@ import type { ToolExecutionContext } from "@voltagent/core";
 import type { Page } from "playwright";
 
 /**
+ * Helper function to extract relevant data from a DOM element.
+ * Moved outside to reduce nesting depth.
+ */
+function getElementData(el: Element) {
+  const attributes = Object.fromEntries(
+      Array.from(el.attributes).map(attr => [attr.name, attr.value])
+  );
+  return {
+      tag: el.tagName.toLowerCase(),
+      text: el.textContent?.trim().slice(0, 100),
+      attributes,
+  };
+}
+
+/**
  * Tool for getting all visible text on a page
  */
 export const getVisibleTextTool = createTool({
@@ -17,11 +32,10 @@ export const getVisibleTextTool = createTool({
   description: "Extracts all visible text content from the current page body.",
   parameters: z.object({}),
   execute: async (_args, options?: ToolExecuteOptions) => {
-    const context = options as ToolExecutionContext;
-    if (!context?.operationContext?.userContext) {
-      throw new Error("ToolExecutionContext is missing or invalid.");
+    if (!options?.operationContext?.userContext) {
+      throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page: Page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       const visibleText = await page.evaluate(() => document.body.innerText);
       return {
         result: "Extracted visible text from the page.",
@@ -39,11 +53,10 @@ export const getVisibleHtmlTool = createTool({
   description: "Gets the HTML structure of the page body.",
   parameters: z.object({}),
   execute: async (_args, options?: ToolExecuteOptions) => {
-    const context = options as ToolExecutionContext;
-    if (!context?.operationContext?.userContext) {
-      throw new Error("ToolExecutionContext is missing or invalid.");
+    if (!options?.operationContext?.userContext) {
+      throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page: Page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       const pageHtml = await page.content();
       return {
         result: "Retrieved HTML structure.",
@@ -61,28 +74,16 @@ export const listInteractiveElementsTool = createTool({
   description: "Lists interactive elements like buttons, links, and inputs visible on the page.",
   parameters: z.object({}),
   execute: async (_args, options?: ToolExecuteOptions) => {
-    const context = options as ToolExecutionContext;
-    if (!context?.operationContext?.userContext) {
-      throw new Error("ToolExecutionContext is missing or invalid.");
+    if (!options?.operationContext?.userContext) {
+      throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page: Page) => {
-      const interactiveElements = await page.evaluate(() => {
-        const getElementData = (el: Element) => {
-            const attributes = Object.fromEntries(
-                Array.from(el.attributes).map(attr => [attr.name, attr.value])
-            );
-            return {
-                tag: el.tagName.toLowerCase(),
-                text: el.textContent?.trim().slice(0, 100),
-                attributes,
-            };
-        };
-
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
+      const interactiveElements = await page.evaluate((getElementDataInternal) => {
         const selectors =
           "a[href], button, input, select, textarea, [role='button'], [role='link']";
         const elements = Array.from(document.querySelectorAll(selectors));
-        return elements.map(getElementData);
-      });
+        return elements.map(getElementDataInternal);
+      }, getElementData);
       return {
         result: `Found ${interactiveElements.length} interactive elements.`,
         elements: interactiveElements,
@@ -99,11 +100,10 @@ export const getUserAgentTool = createTool({
   description: "Gets the current user agent string of the browser.",
   parameters: z.object({}),
   execute: async (_args, options?: ToolExecuteOptions) => {
-    const context = options as ToolExecutionContext;
-    if (!context?.operationContext?.userContext) {
-      throw new Error("ToolExecutionContext is missing or invalid.");
+    if (!options?.operationContext?.userContext) {
+      throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page: Page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       const userAgent = await page.evaluate(() => navigator.userAgent);
       return {
         result: `Current user agent: ${userAgent}`,

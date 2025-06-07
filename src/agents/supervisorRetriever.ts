@@ -104,15 +104,15 @@ class SupervisorContextStore {
     const { type, agentType, tags } = options;
     const idSets: Set<string>[] = [];
 
-    if (type && this.indexByType.has(type)) {
+      if (type && this.indexByType.has(type)) {
       idSets.push(this.indexByType.get(type)!);
-    }
-    if (agentType && this.indexByAgent.has(agentType)) {
+      }
+      if (agentType && this.indexByAgent.has(agentType)) {
       idSets.push(this.indexByAgent.get(agentType)!);
-    }
+        }
     if (tags) {
-      for (const tag of tags) {
-        if (this.indexByTags.has(tag)) {
+        for (const tag of tags) {
+          if (this.indexByTags.has(tag)) {
           idSets.push(this.indexByTags.get(tag)!);
         }
       }
@@ -127,7 +127,7 @@ class SupervisorContextStore {
     let candidates = new Set(idSets[0]);
     for (let i = 1; i < idSets.length; i++) {
       candidates = new Set([...candidates].filter(id => idSets[i].has(id)));
-    }
+            }
     return candidates;
   }
 
@@ -136,32 +136,32 @@ class SupervisorContextStore {
    */
   private calculateRelevance(context: ContextEntry, query: string): number {
     const queryLower = query.toLowerCase();
-    const contentLower = context.content.toLowerCase();
-    const sourceLower = context.source.toLowerCase();
-    let score = 0;
-
-    // Exact phrase match gets highest score
-    if (contentLower.includes(queryLower)) {
-      score += 10;
-    }
-
-    // Word matches
-    const queryWords = queryLower.split(/\s+/);
-    for (const word of queryWords) {
-      if (word.length > 2) { // Skip very short words
-        if (contentLower.includes(word)) score += 2;
-        if (sourceLower.includes(word)) score += 1;
+      const contentLower = context.content.toLowerCase();
+      const sourceLower = context.source.toLowerCase();
+      let score = 0;
+      
+      // Exact phrase match gets highest score
+      if (contentLower.includes(queryLower)) {
+        score += 10;
       }
-    }
-
-    // Recency bonus (newer entries score higher)
-    const daysSinceCreation = (Date.now() - context.metadata.timestamp) / (1000 * 60 * 60 * 24);
-    score += Math.max(0, 5 - daysSinceCreation);
-
-    // Apply metadata relevance score if available
-    if (context.metadata.relevanceScore) {
-      score += context.metadata.relevanceScore;
-    }
+      
+      // Word matches
+      const queryWords = queryLower.split(/\s+/);
+      for (const word of queryWords) {
+        if (word.length > 2) { // Skip very short words
+          if (contentLower.includes(word)) score += 2;
+          if (sourceLower.includes(word)) score += 1;
+        }
+      }
+      
+      // Recency bonus (newer entries score higher)
+      const daysSinceCreation = (Date.now() - context.metadata.timestamp) / (1000 * 60 * 60 * 24);
+      score += Math.max(0, 5 - daysSinceCreation);
+      
+      // Apply metadata relevance score if available
+      if (context.metadata.relevanceScore) {
+        score += context.metadata.relevanceScore;
+      }
 
     return score;
   }
@@ -186,12 +186,12 @@ class SupervisorContextStore {
       if (!context) continue;
 
       const score = this.calculateRelevance(context, query);
-
+      
       if (score >= minRelevanceScore) {
         results.push({ ...context, score });
       }
     }
-
+    
     // Sort by score and limit results
     const sortedResults = [...results].sort((
         a: ContextEntry & { score: number },

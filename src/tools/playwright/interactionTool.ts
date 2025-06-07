@@ -68,7 +68,7 @@ export const typeTool = createTool({
       throw new Error("OperationContext is missing or invalid.");
     }
     return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
-      await page.type(args.selector, args.text, { delay: args.delay, timeout: args.timeout });
+      await page.fill(args.selector, args.text, { timeout: args.timeout });
       return {
         result: `Typed "${args.text}" into element with selector: ${args.selector}`,
       };

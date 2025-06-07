@@ -19,18 +19,18 @@ const listPromptsTool = createTool({
   description: "Lists all available prompt categories and variants in the system.",
   parameters: z.object({}),
   async execute() {
-    try {
+      try {
       const availablePrompts = {
         supervisor: Object.keys(aiVoltPrompts.supervisor),
         worker: Object.keys(aiVoltPrompts.worker),
         utility: Object.keys(aiVoltPrompts.utility),
       };
       return { availablePrompts };
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : String(err) };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
     }
-  }
-});
+  });
 
 // Tool to get a specific prompt
 const getPromptTool = createTool({
@@ -53,8 +53,8 @@ const getPromptTool = createTool({
       return { prompt };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
-    }
   }
+}
 });
 
 const promptManagerToolkit = createToolkit({

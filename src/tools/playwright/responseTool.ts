@@ -28,11 +28,7 @@ export const expectResponseTool = createTool({
     // status: z.number().optional().describe("Expected status code of the response."), // Predicate function is more flexible
   }),
   execute: async (args, options?: ToolExecuteOptions) => {
-    const context = options as ToolExecutionContext;
-    if (!context?.operationContext?.userContext) {
-      throw new Error("ToolExecutionContext is missing or invalid.");
-    }
-    return safeBrowserOperation(context, async (page: Page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       try {
         const response = await page.waitForResponse(args.urlPattern, {
           timeout: args.timeout,
@@ -118,11 +114,7 @@ export const assertResponseTool = createTool({
       .describe("Timeout if waiting for a specific response."),
   }),
   execute: async (args, options?: ToolExecuteOptions) => {
-    const context = options as ToolExecutionContext;
-    if (!context?.operationContext?.userContext) {
-      throw new Error("ToolExecutionContext is missing or invalid.");
-    }
-    return safeBrowserOperation(context, async (page: Page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       let targetResponse: Response | null = null;
 
       if (args.urlPattern) {

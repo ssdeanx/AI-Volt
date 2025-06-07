@@ -9,9 +9,9 @@ import { logger } from '../config/logger.js';
 import ivm from 'isolated-vm';
 import { ESLint } from 'eslint';
 import { Complexity } from 'eslintcc';
-import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as shell from 'shelljs';
 import { Inspector } from 'jsinspect-plus';
-import path from 'path';
 
 /**
  * Executes a JavaScript code snippet in a secure, isolated sandbox.
@@ -34,9 +34,25 @@ export const runIsolatedCodeTool = createTool({
     await jail.set('global', jail.derefInto());
 
     if (mockContext) {
-      for (const key in mockContext) {
-        await jail.set(key, new ivm.Reference(mockContext[key]));
+      const safeMockContext = Object.assign(Object.create(null), mockContext);
+      const allowlist = ['allowedKey1', 'allowedKey2'];  // Replace with actual allowed keys based on your use case
+      for (const key of Object.keys(safeMockContext)) {
+        if (!allowlist.includes(key) || ['__proto__', 'constructor', 'prototype'].includes(key)) {
+          logger.warn(`[runIsolatedCodeTool] Skipping key: ${key}`);
+          continue;
+        }
+        let valueToSet = safeMockContext[key];
+        // Deeper sanitization: Ensure objects are plain and frozen
+        if (typeof valueToSet === 'object' && valueToSet !== null && !Array.isArray(valueToSet)) {
+          valueToSet = Object.freeze(Object.assign(Object.create(null), valueToSet));
+        }
+        await jail.set(key, new ivm.Reference(valueToSet));
       }
+      // Freeze Object.prototype in the isolated context
+      await jail.set('Object', new ivm.Reference({
+        ...Object.getOwnPropertyDescriptors(Object),
+        freeze: Object.freeze,
+      }));
     }
 
     const consoleOutput: string[] = [];
@@ -62,7 +78,11 @@ export const runIsolatedCodeTool = createTool({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('[runIsolatedCodeTool] Execution failed', { error: errorMessage });
-      return { success: false, error: errorMessage, consoleOutput };
+      return {
+        success: false,
+        error: errorMessage, 
+        consoleOutput 
+      };
     } finally {
       isolate.dispose();
     }
@@ -80,7 +100,7 @@ export const lintCodeTool = createTool({
         fileName: z.string().optional().default('temp.ts').describe('The filename to use for context (e.g., component.tsx).'),
     }),
     execute: async ({ code, fileName }) => {
-        const eslint = new ESLint({
+      const eslint = new ESLint({
             overrideConfigFile: path.resolve(process.cwd(), 'eslint.config.ts'),
         });
         
@@ -101,7 +121,7 @@ export const lintCodeTool = createTool({
         }));
 
         return {
-            success: true,
+          success: true,
             results: processedResults,
         };
   },
@@ -132,8 +152,8 @@ export const identifySecurityAntiPatternsTool = createTool({
 
       return {
         success: true,
-            findings,
-            issueCount: findings.length,
+        findings,
+        issueCount: findings.length,
       };
   },
 });
@@ -150,7 +170,8 @@ export const analyzeCodeComplexityTool = createTool({
   }),
   execute: async ({ code }) => {
     const tmpFile = path.join(process.cwd(), `tmp-complexity-${Date.now()}.js`);
-    await fs.writeFile(tmpFile, code);
+    shell.ShellString(code).to(tmpFile);
+    if (shell.error()) throw new Error(shell.error() as string);
     try {
       const complexity = new Complexity();
       const results = await complexity.calculate(tmpFile);
@@ -159,7 +180,8 @@ export const analyzeCodeComplexityTool = createTool({
       logger.error('[analyzeCodeComplexityTool] Failed', { error });
       return { success: false, error: 'Failed to analyze code complexity.' };
     } finally {
-      await fs.unlink(tmpFile);
+      shell.rm(tmpFile);
+      if (shell.error()) console.error(`Error removing temp file: ${shell.error()}`);
     }
   },
 });
@@ -176,12 +198,15 @@ export const findCodeDuplicatesTool = createTool({
   }),
   execute: async ({ fileContents, threshold }) => {
     const tmpDir = path.join(process.cwd(), `tmp-duplicates-${Date.now()}`);
-    await fs.mkdir(tmpDir);
+    shell.mkdir('-p', tmpDir);
+    if (shell.error()) throw new Error(shell.error() as string);
+
     const filePaths: string[] = [];
 
     for (const fileName in fileContents) {
       const filePath = path.join(tmpDir, fileName);
-      await fs.writeFile(filePath, fileContents[fileName]);
+      shell.ShellString(fileContents[fileName]).to(filePath);
+      if (shell.error()) throw new Error(shell.error() as string);
       filePaths.push(filePath);
     }
 
@@ -190,7 +215,8 @@ export const findCodeDuplicatesTool = createTool({
       const matches: any[] = [];
       inspector.on('match', (match: any) => matches.push(match.serialize()));
       inspector.on('end', async () => {
-        await fs.rm(tmpDir, { recursive: true, force: true });
+        shell.rm('-Rf', tmpDir);
+        if (shell.error()) console.error(`Error removing temp dir: ${shell.error()}`);
         resolve({ success: true, duplicates: matches });
       });
       inspector.run();

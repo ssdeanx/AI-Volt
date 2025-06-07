@@ -7,8 +7,9 @@ import { createTool, createToolkit } from '@voltagent/core';
 import { z } from 'zod';
 import { logger } from '../config/logger.js';
 import ivm from 'isolated-vm';
-import * as fs from 'fs/promises';
-import path from 'path';
+import * as path from 'path';
+import * as shell from 'shelljs';
+import { Stats } from 'fs';
 
 // Helper to ensure file paths are safe
 const resolveSecurePath = (filePath: string): string => {
@@ -70,7 +71,11 @@ export const readFileTool = createTool({
         const securePath = resolveSecurePath(filePath);
         logger.info('[readFileTool]', { path: securePath });
         try {
-            return await fs.readFile(securePath, 'utf-8');
+            const content = shell.cat(securePath).toString();
+            if (shell.error()) {
+              throw new Error(shell.error() as string);
+            }
+            return content;
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             logger.error('[readFileTool] Failed', { error: message });
@@ -93,7 +98,10 @@ export const writeFileTool = createTool({
         const securePath = resolveSecurePath(filePath);
         logger.info('[writeFileTool]', { path: securePath });
         try {
-            await fs.writeFile(securePath, content, 'utf-8');
+            shell.ShellString(content).to(securePath);
+            if (shell.error()) {
+              throw new Error(shell.error() as string);
+            }
             return { success: true, path: securePath };
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
@@ -116,7 +124,10 @@ export const deleteFileTool = createTool({
         const securePath = resolveSecurePath(filePath);
         logger.info('[deleteFileTool]', { path: securePath });
         try {
-            await fs.unlink(securePath);
+            shell.rm(securePath);
+            if (shell.error()) {
+              throw new Error(shell.error() as string);
+            }
             return { success: true, path: securePath };
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
@@ -139,11 +150,15 @@ export const listDirectoryTool = createTool({
         const securePath = resolveSecurePath(dirPath);
         logger.info('[listDirectoryTool]', { path: securePath });
         try {
-            const entries = await fs.readdir(securePath, { withFileTypes: true });
-            return entries.map(entry => ({
-                name: entry.name,
-                type: entry.isDirectory() ? 'directory' : 'file',
-            }));
+            const entries = shell.ls(securePath);
+            if (shell.error()) {
+              throw new Error(shell.error() as string);
+            }
+            return entries.map(name => {
+                const fullEntryPath = path.join(securePath, name);
+                const type = shell.test('-d', fullEntryPath) ? 'directory' : 'file';
+                return { name, type };
+            });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             logger.error('[listDirectoryTool] Failed', { error: message });
@@ -165,7 +180,10 @@ export const createDirectoryTool = createTool({
         const securePath = resolveSecurePath(dirPath);
         logger.info('[createDirectoryTool]', { path: securePath });
         try {
-            await fs.mkdir(securePath, { recursive: true });
+            shell.mkdir('-p', securePath);
+            if (shell.error()) {
+              throw new Error(shell.error() as string);
+            }
             return { success: true, path: securePath };
     } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
@@ -188,8 +206,12 @@ export const statTool = createTool({
         const securePath = resolveSecurePath(filePath);
         logger.info('[statTool]', { path: securePath });
         try {
-            return await fs.stat(securePath);
-            } catch (error) {
+            const stats = (shell as any).stat(securePath) as Stats;
+            if (shell.error() || !stats) {
+              throw new Error(shell.error() as string || 'Failed to get stats: file not found');
+            }
+            return stats;
+        } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             logger.error('[statTool] Failed', { error: message });
             throw new Error(`Failed to get stats: ${message}`);
@@ -212,7 +234,10 @@ export const moveTool = createTool({
         const secureDestination = resolveSecurePath(destinationPath);
         logger.info('[moveTool]', { from: secureSource, to: secureDestination });
         try {
-            await fs.rename(secureSource, secureDestination);
+            shell.mv(secureSource, secureDestination);
+            if (shell.error()) {
+              throw new Error(shell.error() as string);
+            }
             return { success: true, from: secureSource, to: secureDestination };
     } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
@@ -237,7 +262,10 @@ export const copyTool = createTool({
         const secureDestination = resolveSecurePath(destinationPath);
         logger.info('[copyTool]', { from: secureSource, to: secureDestination });
         try {
-            await fs.cp(secureSource, secureDestination, { recursive: true });
+            shell.cp('-R', secureSource, secureDestination);
+            if (shell.error()) {
+              throw new Error(shell.error() as string);
+            }
             return { success: true, from: secureSource, to: secureDestination };
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
@@ -248,35 +276,40 @@ export const copyTool = createTool({
 });
 
 /**
- * Replaces a specific line in a file with new content.
+ * Replaces a line in a file with new content.
  */
 export const replaceLineInFileTool = createTool({
-    name: 'replace_line_in_file',
-    description: 'Replaces a single line in a file with new content.',
-    parameters: z.object({
-        filePath: z.string().describe('The path to the file to modify.'),
-        lineNumber: z.number().int().positive().describe('The 1-based line number to replace.'),
-        newContent: z.string().describe('The new content for the specified line.'),
-    }),
-    execute: async ({ filePath, lineNumber, newContent }) => {
-        const securePath = resolveSecurePath(filePath);
-        logger.info('[replaceLineInFileTool]', { path: securePath, lineNumber });
-        try {
-            const originalContent = await fs.readFile(securePath, 'utf-8');
-            const lines = originalContent.split('\n');
-            if (lineNumber > lines.length || lineNumber < 1) {
-                throw new Error(`Line number ${lineNumber} is out of bounds. File has ${lines.length} lines.`);
-            }
-            lines[lineNumber - 1] = newContent;
-            const updatedContent = lines.join('\n');
-            await fs.writeFile(securePath, updatedContent, 'utf-8');
-            return { success: true, path: securePath };
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            logger.error('[replaceLineInFileTool] Failed', { error: message });
-            throw new Error(`Failed to replace line in file: ${message}`);
-        }
-    },
+  name: 'replace_line_in_file',
+  description: 'Replaces a specific line in a file with new content.',
+  parameters: z.object({
+    filePath: z.string().describe('The path to the file.'),
+    lineNumber: z.number().int().min(1).describe('The 1-indexed line number to replace.'),
+    newContent: z.string().describe('The new content for the line.'),
+  }),
+  execute: async ({ filePath, lineNumber, newContent }) => {
+    const securePath = resolveSecurePath(filePath);
+    logger.info('[replaceLineInFileTool]', { path: securePath, lineNumber });
+    try {
+      const fileContent = shell.cat(securePath).toString();
+      if (shell.error()) {
+        throw new Error(shell.error() as string);
+      }
+      const lines = fileContent.split('\n');
+      if (lineNumber < 1 || lineNumber > lines.length) {
+        throw new Error(`Line number ${lineNumber} is out of bounds (1-${lines.length}).`);
+      }
+      lines[lineNumber - 1] = newContent;
+      shell.ShellString(lines.join('\n')).to(securePath);
+      if (shell.error()) {
+        throw new Error(shell.error() as string);
+      }
+      return { success: true, path: securePath, lineNumber };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('[replaceLineInFileTool] Failed', { error: message });
+      throw new Error(`Failed to replace line in file: ${message}`);
+    }
+  },
 });
 
 /**
@@ -287,18 +320,18 @@ export const replaceLineInFileTool = createTool({
  * Secure Coding and File System Toolkit
  */
 export const codingToolkit = createToolkit({
-  name: 'Secure Coding Toolkit',
-  description: 'A suite of tools for secure, sandboxed code execution and safe file system access.',
+  name: 'Coding Toolkit',
+  description: 'Tools for secure code execution and file system manipulations.',
   tools: [
     sandboxedCodeExecutorTool as any,
     readFileTool as any,
     writeFileTool as any,
     deleteFileTool as any,
-    replaceLineInFileTool as any,
     listDirectoryTool as any,
     createDirectoryTool as any,
     statTool as any,
     moveTool as any,
     copyTool as any,
+    replaceLineInFileTool as any,
   ],
 });

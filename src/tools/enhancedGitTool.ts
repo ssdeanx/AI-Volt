@@ -94,7 +94,7 @@ export const secureGitScriptTool = createTool({
     logger.info('[secureGitScriptTool] Executing script', { scriptLength: script.length, timeout });
     
     const isolate = new ivm.Isolate({ memoryLimit: 64 });
-    const context = await isolate.createContext();
+      const context = await isolate.createContext();
     const jail = context.global;
 
     try {
@@ -181,8 +181,8 @@ export const gitRepositoryAnalysisTool = createTool({
               acc[ext] = (acc[ext] || 0) + 1;
               return acc;
             }, {}),
-          };
-        }
+        };
+      }
 
       return analysis;
       });
@@ -211,7 +211,7 @@ export const gitAddTool = createTool({
     return executeInRepo(repoPath, async ({ fs, dir }) => {
       for (const file of files) {
         await git.add({ fs, dir, filepath: file });
-      }
+    }
       return { success: true, added: files };
     });
   },
@@ -267,7 +267,7 @@ export const gitPushTool = createTool({
       return { success: result.ok, result };
     });
   },
-});
+      });
 
 /**
  * Fetches changes from a remote repository.

@@ -72,8 +72,8 @@ export const deployServiceTool = createTool({
     // First, pull the image to ensure it exists
     await dockerApiRequest('POST', `/images/create?fromImage=${imageName}`);
     
-    const ExposedPorts = ports ? Object.keys(ports).reduce((acc, key) => ({ ...acc, [key]: {} }), {}) : {};
-    const PortBindings = ports ? Object.keys(ports).reduce((acc, key) => ({ ...acc, [key]: [{ HostPort: String(ports[key]) }] }), {}) : {};
+    const ExposedPorts = ports ? Object.keys(ports).reduce((acc: Record<string, any>, key) => ({ ...acc, [key]: {} }), Object.create(null)) : Object.create(null);
+    const PortBindings = ports ? Object.keys(ports).reduce((acc: Record<string, any>, key) => ({ ...acc, [key]: [{ HostPort: String(ports[key]) }] }), Object.create(null)) : Object.create(null);
 
     const containerConfig = {
       Image: imageName,

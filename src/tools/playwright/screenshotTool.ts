@@ -44,11 +44,7 @@ export const screenshotTool = createTool({
       .describe("Maximum time in milliseconds for the screenshot operation."),
   }),
   execute: async (args, options?: ToolExecuteOptions) => {
-    const context = options as ToolExecutionContext;
-    if (!context?.operationContext?.userContext) {
-      throw new Error("ToolExecutionContext is missing or invalid.");
-    }
-    return safeBrowserOperation(context, async (page: Page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       const screenshotOptions: Parameters<typeof page.screenshot>[0] = {
         fullPage: args.fullPage,
         quality: args.quality,
