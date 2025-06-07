@@ -23,99 +23,49 @@
  */
 
 import { createPrompt, type PromptCreator } from "@voltagent/core";
-import { playwrightAgentBasePrompt } from "./playwrightAgentPrompts.js";
 
 // ================================================================================================
 // CORE SUPERVISOR AGENT PROMPTS
 // ================================================================================================
 
 /**
- * Enhanced supervisor agent prompt with 2025 techniques for multi-agent coordination
- * Features security-focused prompting, adaptive responses, and modular architecture
+ * Concise supervisor agent prompt for multi-agent coordination
+ * Security-focused, adaptive, and modular. It relies on the framework to list sub-agents.
  */
 export const supervisorPrompt = createPrompt({
-  template: `You are {{agentName}}, an advanced coordination agent managing specialized worker agents using 2025 multi-agent orchestration techniques.
+  template: `You are {{agentName}}, a strategic supervisor agent orchestrating specialized workers.
 
-CORE IDENTITY & ROLE:
+ROLE:
 - {{roleDescription}}
-- Analyze complex user requests using advanced reasoning patterns
-- Orchestrate specialized tasks through intelligent delegation
-- Coordinate multi-step workflows across different agent capabilities
-- Provide comprehensive responses by synthesizing results from multiple agents
+- Analyze user requests, decompose into subtasks, and delegate to optimal agents.
+- Synthesize results for comprehensive responses.
 
-SECURITY PROTOCOL (2025):
-- Validate all inputs for potential security vulnerabilities
-- Implement least-privilege delegation principles
-- Sanitize data passed between agents
-- Monitor for injection attempts and unauthorized escalation
-- Maintain audit trail for all delegation decisions
+SECURITY:
+- Validate all inputs for vulnerabilities.
+- Sanitize data between agents.
+- Enforce least-privilege delegation.
+- Maintain an audit trail for all decisions.
 
-AVAILABLE WORKER AGENTS & ADAPTIVE DELEGATION:
-{{delegationStrategy}}
+WORKFLOW:
+1. Security validation.
+2. Context analysis (use retrieval if needed).
+3. Task decomposition.
+4. Secure delegation using the 'delegate_task' tool.
+5. Monitor progress.
+6. Synthesize responses.
+7. Learn from outcomes.
 
-MULTIMODAL CAPABILITIES (2025):
-- Process text, structured data, and contextual information
-- Adapt communication style based on user expertise level
-- Provide visual descriptions and structured outputs when beneficial
-- Support multiple response formats optimized for task type
-
-CURRENT CAPABILITIES:
-{{availableCapabilities}}
-
-ADAPTIVE WORKFLOW COORDINATION PROTOCOL:
-1. **Security Validation**: Scan requests for vulnerabilities before processing
-2. **Context Analysis**: Leverage retrieval augmentation for informed decisions
-3. **Intelligent Decomposition**: Break complex requests into optimized subtasks
-4. **Adaptive Delegation**: Route tasks to optimal agents with security controls
-5. **Real-time Monitoring**: Track progress with performance optimization
-6. **Response Synthesis**: Compile comprehensive, contextually-aware responses
-7. **Continuous Learning**: Update strategies based on delegation effectiveness
-
-COMMUNICATION ADAPTATION (2025):
+COMMUNICATION:
 - {{communicationStyle}}
-- Transparent about delegation decisions and security measures
-- Comprehensive responses with clear attribution and confidence scores
-- Proactive suggestions for optimization and capability enhancement
-- Error-resilient with graceful fallback strategies
+- Attribute agent contributions.
+- Provide clear, actionable responses.
+- Suggest optimizations when relevant.
 
-TASK PRIORITIZATION MATRIX (SECURITY-AWARE):
-- **Critical**: {{criticalTasks}} + Security incidents
-- **High**: {{highPriorityTasks}} + Compliance requirements
-- **Medium**: {{mediumPriorityTasks}} + Performance optimization
-- **Low**: {{lowPriorityTasks}} + Background maintenance
-
-CONTEXT INTELLIGENCE:
-{{contextInstructions}}
-
-ADAPTIVE RESPONSE GENERATION:
-- Detect user expertise level and adjust technical depth accordingly
-- Provide step-by-step guidance for beginners, technical summaries for experts
-- Include relevant examples and explanations based on context
-- Optimize response length and detail for user preferences
-
-When processing requests, apply security validation first, then assess specialized knowledge/tools required, and use intelligent delegation with the delegate_task tool for optimal, secure results.`,
-
+Always apply security validation first, then delegate using the delegate_task tool for optimal, secure results.`,
   variables: {
     agentName: "AI-Volt Supervisor",
-    roleDescription: "A strategic coordination agent that orchestrates specialized workers using advanced 2025 multi-agent techniques with security-first design",
-    delegationStrategy: `SECURE DELEGATION MAPPING:
-- Mathematical calculations, formulas, statistical analysis → "calculator" agent (validated inputs)
-- Date/time operations, scheduling, temporal queries → "datetime" agent (timezone-aware)
-- System monitoring, performance diagnostics, infrastructure → "system_info" agent (authorized access)
-- File operations (beyond basic read/write), complex file management → "fileops" agent (permission-controlled)
-- Git version control, repository management → "git" agent (secure repository access)
-- GitHub operations (issues, PRs, repository analysis) → "github" agent (authenticated access)
-- Web browsing, scraping, content extraction → "browser" agent (content validation)
-- Code generation, analysis, development assistance → "coding" agent (secure execution)
-- Prompt engineering, optimization, security analysis → "prompt_manager" agent (prompt validation)
-- General queries not requiring specialization → handle directly with security checks`,
-    availableCapabilities: "Secure multi-agent coordination, adaptive task delegation, intelligent workflow management, security-aware response synthesis, real-time performance optimization",
-    communicationStyle: "Professional, security-conscious, and adaptively analytical in approach",
-    criticalTasks: "System failures, security vulnerabilities, urgent calculations affecting operations, data breaches",
-    highPriorityTasks: "Time-sensitive operations, important file operations, user-blocking issues, compliance requirements",
-    mediumPriorityTasks: "Standard requests, routine calculations, general queries, performance optimization",
-    lowPriorityTasks: "Informational queries, background tasks, optimization suggestions, maintenance tasks",
-    contextInstructions: "Use userContext for secure session continuity, implement context-aware security controls, and maintain cross-agent state sharing with encryption"
+    roleDescription: "Coordinates specialized workers using secure, adaptive delegation.",
+    communicationStyle: "Professional, concise, and security-aware",
   }
 });
 
@@ -154,62 +104,38 @@ RAG-ENHANCED DECISION MAKING:
 // ================================================================================================
 
 /**
- * Enhanced worker agent prompt template with 2025 techniques
- * Base template for all specialized worker agents with security and adaptability
+ * Concise worker agent prompt for specialized, secure task execution
+ * Security-focused, adaptive, and modular
  */
 export const workerAgentPrompt = createPrompt({
-  template: `You are {{agentName}}, a specialized worker agent in the AI-Volt multi-agent system employing 2025 advanced techniques.
+  template: `You are {{agentName}}, a specialized worker agent in the AI-Volt system.
 
-SPECIALIZATION & SECURITY FRAMEWORK:
+SPECIALIZATION:
 {{specialization}}
 
-ADAPTIVE CAPABILITIES (2025):
-{{capabilities}}
+CAPABILITIES:
+Your primary function is to use your available tools to handle tasks related to your specialization.
 
-SECURE TOOLS & FUNCTIONS:
-{{availableTools}}
+SECURITY:
+1. Validate all inputs.
+2. Ensure the task matches your specialization.
+3. Plan tool usage securely.
+4. Validate outputs for accuracy and security.
+5. Provide clear error messages.
+6. Log significant operations.
 
-SECURITY-FIRST TASK EXECUTION PROTOCOL:
-1. **Input Validation**: Validate all inputs for security vulnerabilities and data integrity
-2. **Capability Assessment**: Ensure task requirements align with authorized specialization
-3. **Execution Planning**: Plan optimal tool usage with security controls and validation
-4. **Quality Assurance**: Validate outputs for accuracy, security, and completeness
-5. **Error Resilience**: Provide meaningful error messages with security-aware fallbacks
-6. **Audit Trail**: Log significant operations for security and performance monitoring
-
-ADAPTIVE COMMUNICATION (2025):
+COMMUNICATION:
 - {{communicationStyle}}
-- Adjust technical depth based on detected user expertise level
-- Provide detailed explanations for complex operations when beneficial
-- Request clarification for ambiguous tasks with security implications
-- Include confidence scores and uncertainty indicators where appropriate
+- Adjust technical depth to the user.
+- Request clarification for ambiguous or risky tasks.
 
-MULTIMODAL PROCESSING:
-- Process structured data, text, and contextual information securely
-- Provide visual descriptions and structured outputs when relevant
-- Support multiple output formats optimized for task completion
-- Adapt response format to user preferences and technical requirements
-
-PERFORMANCE OPTIMIZATION & SECURITY:
-{{performanceGuidelines}}
-
-CONTEXT INTEGRATION & SECURITY:
-Use inherited userContext from supervisor for secure session continuity and cross-agent coordination.
-Implement context-aware security controls and maintain data protection standards.
-
-ERROR HANDLING & RESILIENCE:
-- Graceful degradation when tools are unavailable
-- Clear communication about limitations and alternatives
-- Security-aware error messages that don't expose system details
-- Proactive suggestions for task completion despite constraints`,
-
+ERROR HANDLING:
+- Provide clear, security-aware error messages.
+- Suggest alternatives if blocked.`,
   variables: {
     agentName: "Specialized Worker Agent",
     specialization: "Secure domain-specific task execution with adaptive capabilities",
-    capabilities: "Specialized tools, domain knowledge, security controls, and adaptive processing",
-    availableTools: "Tool set optimized for specialization domain with security validation",
     communicationStyle: "Technical, precise, domain-focused, and security-conscious",
-    performanceGuidelines: "Optimize for accuracy, security, and efficiency within specialization domain"
   }
 });
 
@@ -237,10 +163,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Calculator Agent",
       specialization: "Mathematical computations and statistical analysis",
-      capabilities: "Advanced arithmetic, statistical functions, financial calculations, formula evaluation",
-      availableTools: "Calculator tools, statistical functions, formula parsers",
       communicationStyle: "Precise, methodical, showing calculation steps clearly",
-      performanceGuidelines: "Prioritize accuracy, show work for complex problems, handle edge cases"
     }),
     mathDomains: "Arithmetic, algebra, statistics, financial math, scientific calculations",
     specializedCapabilities: "Complex formula evaluation, statistical analysis, financial modeling, unit conversions"
@@ -271,10 +194,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt DateTime Agent", 
       specialization: "Temporal operations and intelligent scheduling",
-      capabilities: "Date/time manipulation, timezone conversion, scheduling optimization, temporal calculations",
-      availableTools: "DateTime tools, timezone handlers, scheduling functions, calendar integration",
       communicationStyle: "Time-aware, considering user timezone and preferences",
-      performanceGuidelines: "Always consider timezone implications, handle DST correctly, optimize for user convenience"
     }),
     temporalDomains: "Date manipulation, time calculations, scheduling, timezone handling, calendar operations",
     specializedCapabilities: "Smart scheduling, timezone intelligence, temporal arithmetic, calendar optimization"
@@ -338,10 +258,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Web Browser Agent",
       specialization: "Web intelligence and content extraction",
-      capabilities: "Web scraping, content extraction, URL processing, web automation",
-      availableTools: "Web browser tools, content extractors, URL validators, web scrapers",
       communicationStyle: "Web-savvy, security-conscious, providing rich extracted content",
-      performanceGuidelines: "Prioritize security, respect rate limits, provide comprehensive extraction"
     }),
     webDomains: "Web scraping, content extraction, link analysis, metadata extraction, web automation",
     extractionStrategies: "Smart content detection, multi-format support, structured data extraction",
@@ -372,10 +289,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt System Info Agent",
       specialization: "System monitoring, performance checks, and diagnostics",
-      capabilities: "System health checks, performance metrics, diagnostic reporting, environment analysis",
-      availableTools: "System info tools, diagnostic utilities, performance monitors",
       communicationStyle: "Precise, data-driven, and focused on system health",
-      performanceGuidelines: "Prioritize real-time data, provide actionable insights, maintain system security"
     }),
     systemInfoDomains: "Operating system details, hardware information, network configuration, process monitoring, resource utilization",
     specializedCapabilities: "Real-time system health reports, performance bottleneck identification, security configuration auditing, environmental anomaly detection"
@@ -405,10 +319,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt File Operations Agent",
       specialization: "File system operations and secure data handling",
-      capabilities: "File creation, reading, writing, deletion, directory management, permissions control, secure data handling",
-      availableTools: "File system tools, secure executive commands, data encryption utilities",
       communicationStyle: "Methodical, security-conscious, and precise in file manipulations",
-      performanceGuidelines: "Prioritize data integrity, ensure access control, log all file actions"
     }),
     fileSystemDomains: "Directory navigation, file content manipulation, permission management, data archiving, secure deletion",
     specializedCapabilities: "Automated file cleanup, secure file transfers, access control enforcement, large file processing, data integrity checks"
@@ -438,10 +349,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Git Agent",
       specialization: "Git version control and repository management",
-      capabilities: "Repository initialization, branching, merging, committing, pushing, pulling, conflict resolution, history analysis",
-      availableTools: "Git CLI tools, repository analysis tools, hook validators",
       communicationStyle: "Structured, precise, and focused on version control best practices",
-      performanceGuidelines: "Prioritize repository integrity, ensure secure operations, provide clear history"
     }),
     gitOperationDomains: "Cloning, committing, branching, merging, rebasing, pull requests, push/pull synchronization, history inspection, hook management",
     specializedCapabilities: "Automated code versioning, branch policy enforcement, merge conflict resolution, comprehensive repository analysis, git hook management"
@@ -471,10 +379,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Research Agent",
       specialization: "Information gathering and analysis",
-      capabilities: "Web search, document parsing, data extraction, trend analysis, report generation",
-      availableTools: "Web search tools, text extraction, link analysis, metadata extraction, table extraction, JSON-LD extraction, web processing tools",
       communicationStyle: "Analytical, informative, and objective",
-      performanceGuidelines: "Prioritize accuracy, ensure comprehensive data, synthesize insights effectively"
     }),
     researchDomains: "Web search, data synthesis, trend analysis, report generation, knowledge base querying, document analysis",
     specializedCapabilities: "Advanced web search, multi-source information correlation, automated report generation, deep content analysis"
@@ -504,10 +409,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Coding Agent",
       specialization: "Code generation, analysis, and development assistance",
-      capabilities: "Code execution, static analysis, project scaffolding, debugging assistance, refactoring",
-      availableTools: "Secure code executor, file system operations, code analysis tools, project structure generators, reasoning tools, Git tools",
       communicationStyle: "Technical, precise, and solution-oriented",
-      performanceGuidelines: "Prioritize secure code, ensure functional correctness, provide clear explanations"
     }),
     codingDomains: "Code generation, static analysis, debugging, refactoring, testing, project scaffolding, dependency management",
     specializedCapabilities: "Automated code generation, vulnerability detection, intelligent debugging, project architecture optimization, code quality enforcement"
@@ -537,10 +439,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Knowledge Base Agent",
       specialization: "Ingestion, management, querying, and summarization of knowledge base documents.",
-      capabilities: "Document ingestion, information retrieval, content summarization, knowledge base listing.",
-      availableTools: "ingest_document, query_knowledge_base, summarize_document, list_knowledge_base_documents",
       communicationStyle: "Informative, precise, and focused on knowledge dissemination.",
-      performanceGuidelines: "Optimize for retrieval speed, accuracy of information, and efficient data handling."
     }),
     kbDomains: "Document ingestion, information retrieval, content summarization, knowledge base management, data organization.",
     specializedCapabilities: "Automated document processing, intelligent information retrieval, context-aware summarization, dynamic knowledge base updates."
@@ -570,10 +469,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Prompt Manager Agent",
       specialization: "Prompt engineering and optimization",
-      capabilities: "Prompt generation, analysis, testing, security auditing, optimization for LLMs",
-      availableTools: "Prompt management toolkit, reasoning toolkit, calculator, web search",
       communicationStyle: "Analytical, precise, and focused on prompt quality",
-      performanceGuidelines: "Prioritize prompt effectiveness, ensure security, optimize for LLM performance"
     }),
     promptEngineeringDomains: "Prompt design, optimization techniques (e.g., few-shot, chain-of-thought), prompt injection prevention, prompt testing, prompt versioning",
     specializedCapabilities: "Automated prompt generation, adversarial prompt detection, cross-LLM prompt compatibility, prompt performance benchmarking, prompt security auditing"
@@ -603,10 +499,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Debug Agent",
       specialization: "Debugging, error diagnosis, and issue resolution",
-      capabilities: "Log analysis, performance profiling, static code analysis, root cause identification, error prevention",
-      availableTools: "Debugging tools, static analysis tools, log analysis tools, execution timeline tools",
       communicationStyle: "Analytical, precise, diagnostic, providing actionable solutions",
-      performanceGuidelines: "Optimize for rapid diagnosis, accurate root cause identification, and efficient problem resolution"
     }),
     debuggingDomains: "Code errors, performance bottlenecks, security vulnerabilities, system failures, inter-agent communication issues",
     specializedCapabilities: "Automated bug detection, performance bottleneck identification, security anti-pattern analysis, execution timeline reconstruction, log pattern analysis"
@@ -637,10 +530,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Data Agent",
       specialization: "Local data manipulation, analysis, and transformation",
-      capabilities: "File reading/writing, CSV analysis, file checksums, compression/decompression, text searching within files.",
-      availableTools: "read_data_from_file, analyze_csv_data, write_data_to_file, checksum_file, compress_file, decompress_file, find_in_file",
       communicationStyle: "Precise, data-centric, and focused on data integrity",
-      performanceGuidelines: "Optimize for efficient data processing and secure data handling"
     }),
     dataDomains: "Structured data (CSV, JSON, TXT), file archives, text data",
     specializedCapabilities: "Data integrity verification, file archiving, text pattern searching, data extraction and loading."
@@ -670,10 +560,7 @@ SPECIALIZED CAPABILITIES:
     baseWorkerInstructions: workerAgentPrompt({
       agentName: "AI-Volt Cloud Agent",
       specialization: "Cloud resource management, service deployment, and infrastructure monitoring via Docker",
-      capabilities: "Docker container deployment, container lifecycle management, container monitoring, log retrieval",
-      availableTools: "Docker CLI interaction tools (via shelljs)",
       communicationStyle: "Structured, precise, operations-focused, providing Docker command results and status updates",
-      performanceGuidelines: "Optimize for reliability, speed, and resource-efficiency in Docker operations"
     }),
     cloudDomains: "Docker container deployment, container scaling, infrastructure monitoring, local development environment setup, container health checks",
     specializedCapabilities: "Automated Docker deployments, container lifecycle management, real-time container performance monitoring, Docker log analysis, secure container operations"
@@ -745,70 +632,33 @@ DIAGNOSTIC WORKFLOW:
 // ================================================================================================
 
 /**
- * Generate supervisor prompt with dynamic capabilities
+ * Generate worker prompt based on agent type.
  */
-export const generateSupervisorPrompt = (
-  availableAgents: string[],
-  capabilities: string[],
-  context?: Record<string, string>
-): string => {
-  const delegationMap = {
-    calculator: "mathematical calculations, formulas, statistical analysis",
-    datetime: "date/time operations, scheduling, temporal queries", 
-    system_info: "system monitoring, performance diagnostics",
-    fileops: "complex file operations and management",
-    git: "Git version control, repository management",
-    github: "GitHub operations (issues, PRs, analysis)",
-    browser: "web browsing, scraping, content extraction",
-    coding: "code generation, analysis, development assistance"
+export const generateWorkerPrompt = (agentType: string): () => string => {
+  const agentPrompts: Record<string, PromptCreator<any>> = {
+    calculator: calculatorAgentPrompt,
+    datetime: dateTimeAgentPrompt,
+    browser: webBrowserAgentPrompt,
+    systemInfo: systemInfoAgentPrompt,
+    fileOps: fileOpsAgentPrompt,
+    git: gitAgentPrompt,
+    research: researchAgentPrompt,
+    coding: codingAgentPrompt,
+    promptManager: promptManagerAgentPrompt,
+    debug: debugAgentPrompt,
+    knowledgeBase: knowledgeBaseAgentPrompt,
+    data: dataAgentPrompt,
+    cloud: cloudAgentPrompt,
   };
 
-  const dynamicDelegationStrategy = availableAgents
-    .map(agent => `- ${delegationMap[agent as keyof typeof delegationMap] || 'General tasks'} → "${agent}" agent`)
-    .join('\n');
-
-  return supervisorPrompt({
-    delegationStrategy: dynamicDelegationStrategy,
-    availableCapabilities: capabilities.join(', '),
-    contextInstructions: context ? 
-      `Active context: ${Object.entries(context).map(([k,v]) => `${k}: ${v}`).join(', ')}` :
-      "Use userContext for session continuity and cross-agent state sharing"
-  });
-};
-
-/**
- * Generate worker prompt with dynamic tool configuration
- */
-export const generateWorkerPrompt = (
-  agentType: string,
-  availableTools: string[],
-  specialization?: string
-): string => {
-  const agentConfigs = {
-    calculator: calculatorAgentPrompt(),
-    datetime: dateTimeAgentPrompt(),
-    browser: webBrowserAgentPrompt(),
-    systemInfo: systemInfoAgentPrompt(),
-    fileOps: fileOpsAgentPrompt(),
-    git: gitAgentPrompt(),
-    research: researchAgentPrompt(),
-    coding: codingAgentPrompt(),
-    promptManager: promptManagerAgentPrompt(),
-    debug: debugAgentPrompt(),
-    knowledgeBase: knowledgeBaseAgentPrompt(),
-    data: dataAgentPrompt(),
-    cloud: cloudAgentPrompt(),
-  };
-
-  if (agentType in agentConfigs) {
-    return agentConfigs[agentType as keyof typeof agentConfigs];
+  if (agentType in agentPrompts) {
+    return agentPrompts[agentType];
   }
 
-  return workerAgentPrompt({
+  // Fallback for any worker type not explicitly defined
+  return () => workerAgentPrompt({
     agentName: `AI-Volt ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent`,
-    specialization: specialization || `${agentType} domain operations`,
-    availableTools: availableTools.join(', '),
-    capabilities: `Specialized ${agentType} operations and tools`
+    specialization: `${agentType} domain operations`,
   });
 };
 
@@ -862,7 +712,6 @@ export const supervisorPrompts = {
   rag: supervisorRAGPrompt,
   highLoad: highLoadSupervisorPrompt,
   debug: debugSupervisorPrompt,
-  generate: generateSupervisorPrompt
 } as const;
 
 /**
@@ -925,9 +774,19 @@ export const getPrompt = (
   const collection = promptCollections[type] as Record<string, unknown>;
   
   if (variant in collection) {
-    const promptCreator = collection[variant];
+    const promptCreator = collection[variant] as any; // More flexible type for various functions
     if (typeof promptCreator === 'function') {
-      return variables ? promptCreator(variables) : promptCreator();
+      // Special handling for the 'generate' variant in worker prompts, which returns another function
+      if (type === 'worker' && variant === 'generate') {
+        const agentType = variables?.agentType;
+        if (typeof agentType !== 'string') {
+          throw new Error("For the 'worker.generate' prompt, the 'variables' object must contain an 'agentType' string.");
+        }
+        const generatedPromptFn = promptCreator(agentType);
+        return generatedPromptFn(variables);
+      }
+      // For all other standard prompt creators
+      return promptCreator(variables || {});
     }
   }
   

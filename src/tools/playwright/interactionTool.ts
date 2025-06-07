@@ -5,8 +5,9 @@
 
 import { z } from "zod";
 import { createTool, type ToolExecuteOptions } from "@voltagent/core";
-import { safeBrowserOperation } from "./browserBaseTools";
+import { safeBrowserOperation } from "./browserBaseTools.js";
 import type { ToolExecutionContext } from "@voltagent/core";
+import type { Page } from "playwright";
 
 /**
  * Tool for clicking on an element
@@ -29,7 +30,7 @@ export const clickTool = createTool({
     if (!options?.operationContext?.userContext) {
       throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       await page.click(args.selector, {
         button: args.button,
         clickCount: args.clickCount,
@@ -66,7 +67,7 @@ export const typeTool = createTool({
     if (!options?.operationContext?.userContext) {
       throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       await page.type(args.selector, args.text, { delay: args.delay, timeout: args.timeout });
       return {
         result: `Typed "${args.text}" into element with selector: ${args.selector}`,
@@ -89,9 +90,9 @@ export const getTextTool = createTool({
     if (!options?.operationContext?.userContext) {
       throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       await page.waitForSelector(args.selector, { timeout: args.timeout });
-      const text = await page.$eval(args.selector, (el) => el.textContent?.trim() || "");
+      const text = await page.$eval(args.selector, (el: Element) => el.textContent?.trim() || "");
 
       return {
         result: `Text content: ${text}`,
@@ -129,7 +130,7 @@ export const selectOptionTool = createTool({
     else if (index !== undefined) selectCriteria = { index };
     else throw new Error("Either value, label, or index must be provided for selectOption.");
 
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       const selectedValues = await page.selectOption(selector, selectCriteria, { timeout });
       return {
         result: `Selected option in ${selector}. Selected values: ${selectedValues.join(", ")}`,
@@ -153,7 +154,7 @@ export const checkTool = createTool({
     if (!options?.operationContext?.userContext) {
       throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       await page.check(args.selector, {
         timeout: args.timeout,
         force: args.force,
@@ -178,7 +179,7 @@ export const uncheckTool = createTool({
     if (!options?.operationContext?.userContext) {
       throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       await page.uncheck(args.selector, {
         timeout: args.timeout,
         force: args.force,
@@ -203,7 +204,7 @@ export const hoverTool = createTool({
     if (!options?.operationContext?.userContext) {
       throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       await page.hover(args.selector, {
         timeout: args.timeout,
         force: args.force,
@@ -229,7 +230,7 @@ export const pressKeyTool = createTool({
     if (!options?.operationContext?.userContext) {
       throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       if (args.selector) {
         await page.focus(args.selector, { timeout: args.timeout });
       }
@@ -263,7 +264,7 @@ export const waitForElementTool = createTool({
     if (!options?.operationContext?.userContext) {
       throw new Error("OperationContext is missing or invalid.");
     }
-    return safeBrowserOperation(options as ToolExecutionContext, async (page) => {
+    return safeBrowserOperation(options as ToolExecutionContext, async (page: Page) => {
       await page.waitForSelector(args.selector, {
         state: args.state,
         timeout: args.timeout,

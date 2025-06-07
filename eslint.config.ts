@@ -2,10 +2,18 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
+import sonarjs from 'eslint-plugin-sonarjs';
+import security from 'eslint-plugin-security';
 
 export default tseslint.config(
   // ESLint recommended configurations
   eslint.configs.recommended,
+
+  // SonarJS recommended configurations
+  sonarjs.configs.recommended,
+  
+  // Security recommended configurations
+  security.configs.recommended,
 
   // TypeScript ESLint basic recommended configurations
   // This set does not require project (tsconfig.json) for basic linting,
@@ -19,8 +27,17 @@ export default tseslint.config(
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
+        project: true,
         // project: true, // You can enable this later for more powerful type-aware rules
-        // tsconfigRootDir: import.meta.dirname,
+        tsconfigRootDir: import.meta.dirname,
+        tsconfig: './tsconfig.json',
+        extraFileExtensions: ['.ts', '.tsx'],
+        warnOnUnsupportedTypeScriptVersion: true,
+        warnOnUnmatchedTypeScriptVersion: true,
+        warnOnUnmatchedLibraryVersion: true,
+        warnOnUnmatchedLibraryName: true,
+
+
         ecmaVersion: 'latest', // Use modern ECMAScript features
         sourceType: 'module',
       },
@@ -99,7 +116,7 @@ export default tseslint.config(
       '*.md', // Usually not linted for code style
       'llm.txt',
       // Add any other specific files or patterns to ignore
-      // 'eslint.config.ts', // Might be needed if it self-lints with type-aware rules
+      'eslint.config.ts', // Might be needed if it self-lints with type-aware rules
     ],
   }
 );

@@ -7,8 +7,9 @@ import { z } from "zod";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { createTool, type ToolExecuteOptions } from "@voltagent/core";
-import { safeBrowserOperation } from "./browserBaseTools";
+import { safeBrowserOperation } from "./browserBaseTools.js";
 import type { ToolExecutionContext } from "@voltagent/core";
+import type { Page } from "playwright";
 
 /**
  * Tool for capturing a screenshot of the current page
@@ -47,7 +48,7 @@ export const screenshotTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       const screenshotOptions: Parameters<typeof page.screenshot>[0] = {
         fullPage: args.fullPage,
         quality: args.quality,
@@ -66,8 +67,7 @@ export const screenshotTool = createTool({
             throw error;
           }
         }
-        screenshotOptions.path = args.filename;
-        await page.screenshot(screenshotOptions);
+        await page.screenshot({ ...screenshotOptions, path: args.filename });
         return { result: `Screenshot saved to ${args.filename}` };
       }
       const buffer = await page.screenshot(screenshotOptions);

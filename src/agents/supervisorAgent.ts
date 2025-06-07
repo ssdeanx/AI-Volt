@@ -11,30 +11,30 @@ import { generateId } from "ai";
 import { calculatorTool, statisticsAnalysisTool } from "../tools/calculator.js";
 import { dateTimeTool } from "../tools/datetime.js";
 import { systemInfoTool } from "../tools/systemInfo.js";
-import { 
-  gitStatusTool,
-  gitAddTool,
-  gitCommitTool,
-  gitPushTool,
-  gitPullTool,
-  gitBranchTool,
-  gitLogTool,
-  gitDiffTool,
-  gitMergeTool,
-  gitResetTool,
-  gitTool,
-} from "../tools/gitTool.js";
 import {
   enhancedGitStatusTool,
   secureGitScriptTool,
   gitRepositoryAnalysisTool,
-  gitHookValidatorTool,
+  gitCloneTool,
+  gitAddTool,
+  gitCommitTool,
+  gitPushTool,
+  gitFetchTool,
+  gitPullTool,
+  gitMergeTool,
+  gitBranchTool,
 } from "../tools/enhancedGitTool.js";
 import {
-  secureCodeExecutorTool,
-  fileSystemOperationsTool,
-  codeAnalysisTool,
-  projectStructureGeneratorTool,
+  sandboxedCodeExecutorTool,
+  readFileTool,
+  writeFileTool,
+  deleteFileTool,
+  listDirectoryTool,
+  createDirectoryTool,
+  statTool,
+  moveTool,
+  copyTool,
+  replaceLineInFileTool,
 } from "../tools/codingTools.js";
 import {
   secureWebProcessorTool,
@@ -82,12 +82,26 @@ import {
   getUserProfileTool,
   listOrgMembersTool,
 } from "../tools/githubTool.js";
-import { runIsolatedCodeTool, runJsInspectTool, runEslintTool } from "../tools/debugTools.js";
-import { identifySecurityAntiPatternsTool } from "../tools/debugTools.js";
-import { getNodeProcessInfoTool, guideNodeProfilerTool, analyzeCodeComplexityTool, analyzeLogPatternsTool, getAgentExecutionTimelineTool } from "../tools/debugTools.js";
+import {
+    runIsolatedCodeTool,
+    lintCodeTool,
+    identifySecurityAntiPatternsTool,
+    analyzeCodeComplexityTool,
+    findCodeDuplicatesTool
+} from "../tools/debugTools.js";
 import { ingestDocumentTool, queryKnowledgeBaseTool, summarizeDocumentTool, listKnowledgeBaseDocumentsTool } from "../tools/knowledgeBaseTools.js";
 import { readDataFromFileTool, analyzeCsvDataTool, writeDataToFileTool } from "../tools/dataTools.js";
-import { deployServiceTool, manageResourcesTool, monitorCloudTool } from "../tools/cloudTools.js";
+import { 
+  deployServiceTool,
+  listContainersTool,
+  stopContainerTool,
+  removeContainerTool,
+  getContainerLogsTool,
+  inspectContainerTool,
+  listImagesTool,
+  buildImageTool,
+} from "../tools/cloudTools.js";
+import { promptManagerToolkit } from "../tools/index.js";
 /**
  * Context symbols for type-safe userContext keys
  * Following VoltAgent best practices for avoiding key collisions
@@ -241,7 +255,7 @@ const createSupervisorHooks = () => createHooks({
         duration,
         totalDelegations: delegationCount,
         activeDelegations: delegationSummary,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
     } else {
       const out: any = output;
@@ -336,53 +350,18 @@ const createSupervisorHooks = () => createHooks({
           operationId: context.operationId,
           toolName: tool.name,
           duration: delegationDuration,
-          error: error.message,
+          error: error instanceof Error ? error.message : String(error),
         });
       } else {
-        // Track successful delegation
-        const taskId = `task-${generateId()}`;
-        
-        // Extract delegation details if possible
-        let agentType = "unknown";
-        let taskDescription = "delegation-completed";
-        
-        try {
-          const resultStr = typeof output === "string" ? output : JSON.stringify(output);
-          
-          // Try to determine which agent was used
-          const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding'];
-          for (const type of agentTypes) {
-            if (resultStr.toLowerCase().includes(type)) {
-              agentType = type;
-              break;
-            }
-          }
-          taskDescription = resultStr.substring(0, 100);
-        } catch {
-          // Safe fallback
-          taskDescription = "delegation-completed";
-        }
-        
-        // Add to active delegations map
-        activeDelegations.set(taskId, {
-          agentType,
-          taskId,
-          startTime: delegationStartTime,
-          description: taskDescription
-        });
-        context.userContext.set(CONTEXT_KEYS.ACTIVE_DELEGATIONS, activeDelegations);
-        
-        logger.info(`[${agent.name}] Task delegation successful`, {
+        // This logic is simplified because onHandoff on the worker is more reliable for tracking.
+        logger.info(`[${agent.name}] Task delegation tool executed successfully`, {
           sessionId,
           delegationId,
           workflowId,
           operationId: context.operationId,
           toolName: tool.name,
-          taskId,
-          agentType,
           duration: delegationDuration,
-          totalActiveDelegations: activeDelegations.size,
-          resultPreview: taskDescription
+          resultPreview: typeof output === 'string' ? output.substring(0, 100) : JSON.stringify(output).substring(0,100),
         });
       }
     } else {
@@ -394,7 +373,7 @@ const createSupervisorHooks = () => createHooks({
           workflowId,
           operationId: context.operationId,
           toolName: tool.name,
-          error: error.message,
+          error: error instanceof Error ? error.message : String(error),
         });
       } else {
         logger.debug(`[${agent.name}] Supervisor tool completed`, {
@@ -410,12 +389,11 @@ const createSupervisorHooks = () => createHooks({
   },
 
   onHandoff: async (args: OnHandoffHookArgs) => {
-    // Note: OnHandoffHookArgs structure may be different from other hook args
-    // For now, just log the handoff event
-    logger.info(`[Supervisor] Task handoff received`, {
-      handoffType: "supervisor-coordination",
+    // The exact shape of OnHandoffHookArgs seems to be causing issues.
+    // Let's log the whole object to be safe and inspect its structure.
+    logger.info(`[Agent] Task received via handoff`, {
+      handoffArgs: JSON.stringify(args, null, 2),
       timestamp: new Date().toISOString(),
-      args: JSON.stringify(args, null, 2) // Log the actual structure for debugging
     });
   }
    
@@ -586,8 +564,8 @@ export const createSupervisorAgent = async () => {
 
     // 2) Build the Agent, adding retriever.tool instead of direct retriever:
       const supervisorAgent = new Agent({
-      name: "AI-Volt-Supervisor",
-      instructions: supervisorPrompts.rag(),
+      name: "SupervisorAgent",
+      instructions: supervisorPrompts.standard(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {
@@ -610,32 +588,21 @@ export const createSupervisorAgent = async () => {
         fetchRepoStarsTool,
         fetchRepoContributorsTool,
       ],
-      subAgents: Object.assign(
-        [
-          workers.calculator,
-          workers.datetime,
-          workers.systemInfo,
-          workers.fileOps,
-          workers.git,
-          workers.browser,
-          workers.coding,
-          workers.promptManager,
-          workers.debug,
-          workers.research,
-        ],
-        {
-          calculator: workers.calculator,
-          datetime: workers.datetime, 
-          system_info: workers.systemInfo,
-          fileops: workers.fileOps,
-          git: workers.git,
-          browser: workers.browser,
-          coding: workers.coding,
-          prompt_manager: workers.promptManager,
-          debug: workers.debug,
-          research: workers.research,
-        }
-      ),
+      subAgents: [
+        workers.calculator,
+        workers.datetime,
+        workers.systemInfo,
+        workers.fileOps,
+        workers.git,
+        workers.browser,
+        workers.coding,
+        workers.promptManager,
+        workers.debug,
+        workers.research,
+        workers.knowledgeBase,
+        workers.data,
+        workers.cloud,
+      ],
       memory: memoryStorage,
       hooks: enhancedHooks,
     });
@@ -706,7 +673,7 @@ const createWorkerHooks = (agentType: string) => createHooks({
         agentType,
         operationId: context.operationId,
         duration,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
     } else {
       logger.info(`[${agent.name}] Specialized task completed`, {
@@ -754,7 +721,7 @@ const createWorkerHooks = (agentType: string) => createHooks({
         operationId: context.operationId,
         toolName: tool.name,
         duration: toolDuration,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
     } else {
       logger.info(`[${agent.name}] Specialized tool execution completed`, {
@@ -767,7 +734,7 @@ const createWorkerHooks = (agentType: string) => createHooks({
         outputPreview: typeof output === "string" ? output.substring(0, 100) : JSON.stringify(output).substring(0, 100)
       });
     }
-  }
+  },
 });
 
 /**
@@ -780,8 +747,9 @@ export const createWorkerAgents = async () => {
   try {
     // Calculator worker agent
     const calculatorWorker = new Agent({
-      name: "AI-Volt-Calculator",
-      instructions: workerPrompts.calculator(),
+      name: "CalculatorAgent",
+      purpose: "Performs mathematical calculations, formulas, and statistical analysis.",
+      instructions: workerPrompts.generate("calculator")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
@@ -792,8 +760,9 @@ export const createWorkerAgents = async () => {
 
     // DateTime worker agent
     const dateTimeWorker = new Agent({
-      name: "AI-Volt-DateTime", 
-      instructions: workerPrompts.datetime(),
+      name: "DateTimeAgent", 
+      purpose: "Handles date/time operations, formatting, scheduling, and timezone conversions.",
+      instructions: workerPrompts.generate("datetime")(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
       tools: [dateTimeTool],
@@ -803,8 +772,9 @@ export const createWorkerAgents = async () => {
 
     // System Info worker agent
     const systemInfoWorker = new Agent({
-      name: "AI-Volt-SystemInfo",
-      instructions: workerPrompts.systemInfo(),
+      name: "SystemInfoAgent",
+      purpose: "Provides system monitoring, performance checks, and diagnostics.",
+      instructions: workerPrompts.generate("systemInfo")(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
       tools: [systemInfoTool],
@@ -814,38 +784,46 @@ export const createWorkerAgents = async () => {
 
     // File Operations worker agent - uses the coding tools for file operations
     const fileOpsWorker = new Agent({
-      name: "AI-Volt-FileOps",
-      instructions: workerPrompts.fileOps(),
+      name: "FileOpsAgent",
+      purpose: "Manages complex file operations and file management tasks.",
+      instructions: workerPrompts.generate("fileOps")(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
-      tools: [fileSystemOperationsTool, secureCodeExecutorTool],
+      tools: [
+        readFileTool,
+        writeFileTool,
+        deleteFileTool,
+        listDirectoryTool,
+        createDirectoryTool,
+        statTool,
+        moveTool,
+        copyTool,
+        replaceLineInFileTool,
+      ],
       memory: createWorkerMemory("fileops"),
       hooks: createWorkerHooks("fileops"),
     });
 
     // Git worker agent - uses git tools
     const gitWorker = new Agent({
-      name: "AI-Volt-Git",
-      instructions: workerPrompts.git(),
+      name: "GitAgent",
+      purpose: "Handles Git version control operations and repository management.",
+      instructions: workerPrompts.generate("git")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
       tools: [
-        gitStatusTool,
-        gitAddTool,
-        gitCommitTool,
-        gitPushTool,
-        gitPullTool,
-        gitBranchTool,
-        gitLogTool,
-        gitDiffTool,
-        gitMergeTool,
-        gitResetTool,
-        gitTool,
         enhancedGitStatusTool,
         secureGitScriptTool,
         gitRepositoryAnalysisTool,
-        gitHookValidatorTool,
+        gitCloneTool,
+        gitAddTool,
+        gitCommitTool,
+        gitPushTool,
+        gitFetchTool,
+        gitPullTool,
+        gitMergeTool,
+        gitBranchTool,
         getFileContentTool,
         listRepositoryContentsTool,
         listPullRequestsTool,
@@ -860,8 +838,6 @@ export const createWorkerAgents = async () => {
         createRepositoryHookTool,
         getUserProfileTool,
         listOrgMembersTool,
-        runJsInspectTool,
-        runEslintTool,
       ],
       memory: createWorkerMemory("git"),
       hooks: createWorkerHooks("git"),
@@ -869,8 +845,9 @@ export const createWorkerAgents = async () => {
 
     // Browser worker agent - uses web browser tools
     const researchWorker = new Agent({
-      name: "AI-Volt-Research",
-      instructions: workerPrompts.research(),
+      name: "ResearchAgent",
+      purpose: "Conducts web searching, browsing, content extraction, and web scraping.",
+      instructions: workerPrompts.generate("research")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
@@ -891,41 +868,24 @@ export const createWorkerAgents = async () => {
 
     // Coding worker agent - uses coding tools
     const codingWorker = new Agent({
-      name: "AI-Volt-Coding",
-      instructions: workerPrompts.coding(),
+      name: "CodingAgent",
+      purpose: "Manages code execution, analysis, development assistance, and project structure.",
+      instructions: workerPrompts.generate("coding")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 2048,},} satisfies GoogleGenerativeAIProviderOptions,},
       tools: [
-        secureCodeExecutorTool,
-        fileSystemOperationsTool,
-        codeAnalysisTool,
-        projectStructureGeneratorTool,
-        reasoningToolkit, // Add reasoning tools for complex analysis
-        thinkOnlyToolkit, // Add "think-only" toolkit for analysis only
-        getFileContentTool,
-        listRepositoryContentsTool,
-        listRepositoryHooksTool,
-        createRepositoryHookTool,
-        getUserProfileTool,
-        listOrgMembersTool,
-        createRepositoryTool,
-        listPullRequestsTool,
-        getPullRequestDetailsTool,
-        createPullRequestTool,
-        mergePullRequestTool,
-        commentOnPullRequestTool,
-        listPullRequestFilesTool,
-        enhancedGitStatusTool,
-        secureGitScriptTool,
-        gitRepositoryAnalysisTool,
-        runIsolatedCodeTool,
-        runJsInspectTool,
-        runEslintTool,
-        identifySecurityAntiPatternsTool,
+        sandboxedCodeExecutorTool,
+        lintCodeTool,
         analyzeCodeComplexityTool,
-        analyzeLogPatternsTool,
-        getAgentExecutionTimelineTool,
+        findCodeDuplicatesTool,
+        identifySecurityAntiPatternsTool,
+        readFileTool,
+        writeFileTool,
+        deleteFileTool,
+        listDirectoryTool,
+        createDirectoryTool,
+        replaceLineInFileTool,
       ],
       memory: createWorkerMemory("coding"),
       hooks: createWorkerHooks("coding"),
@@ -933,13 +893,14 @@ export const createWorkerAgents = async () => {
 
     // Prompt Management worker agent - NEW 2025 enhancement
     const promptManagerWorker = new Agent({
-      name: "AI-Volt-PromptManager",
-      instructions: workerPrompts.promptManager(),
+      name: "PromptManagerAgent",
+      purpose: "Manages prompt engineering, optimization, and security analysis of prompts.",
+      instructions: workerPrompts.generate("promptManager")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 1024,},} satisfies GoogleGenerativeAIProviderOptions,},
       tools: [
-        promptManagementToolkit, // For managing prompts and instructions
+        promptManagerToolkit,
         reasoningToolkit, // For complex prompt analysis
         calculatorTool, // For scoring and metrics
         webSearchTool, // For researching latest techniques
@@ -950,30 +911,26 @@ export const createWorkerAgents = async () => {
 
     // Debug worker agent - uses the coding tools for file oprations
     const debugWorker = new Agent({
-      name: "AI-Volt-Debug",
-      instructions: workerPrompts.debug(),
+      name: "DebugAgent",
+      purpose: "Handles debugging, error diagnosis, and issue resolution.",
+      instructions: workerPrompts.generate("debug")(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
       tools: [
-        fileSystemOperationsTool, 
-        secureCodeExecutorTool,
-        getNodeProcessInfoTool,
-        guideNodeProfilerTool,
         runIsolatedCodeTool,
-        runJsInspectTool,
-        runEslintTool,
+        lintCodeTool,
         identifySecurityAntiPatternsTool,
         analyzeCodeComplexityTool,
-        analyzeLogPatternsTool,
-        getAgentExecutionTimelineTool,
+        findCodeDuplicatesTool,
       ],
       memory: createWorkerMemory("debug"),
       hooks: createWorkerHooks("debug"),
     });
 
     const browserWorker = new Agent({
-      name: "AI-Volt-Browser",
-      instructions: workerPrompts.browser(),
+      name: "BrowserAgent",
+      purpose: "Automates web pages using Playwright tools for navigation, interaction and data extraction.",
+      instructions: workerPrompts.generate("browser")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
@@ -991,8 +948,9 @@ export const createWorkerAgents = async () => {
 
     // Knowledge Base worker agent - NEW
     const knowledgeBaseWorker = new Agent({
-      name: "AI-Volt-KnowledgeBase",
-      instructions: workerPrompts.knowledgeBase(),
+      name: "KnowledgeBaseAgent",
+      purpose: "Manages ingestion, querying, and summarization of documents in the knowledge base.",
+      instructions: workerPrompts.generate("knowledgeBase")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
       providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
@@ -1008,15 +966,15 @@ export const createWorkerAgents = async () => {
 
     // Data worker agent - NEW
     const dataWorker = new Agent({
-      name: "AI-Volt-Data",
-      instructions: workerPrompts.data(),
+      name: "DataAgent",
+      purpose: "Handles data manipulation, analysis, and transformation from local files.",
+      instructions: workerPrompts.generate("data")(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
       tools: [
         readDataFromFileTool,
         analyzeCsvDataTool,
         writeDataToFileTool,
-        fileSystemOperationsTool, // Generic file system operations might be useful for data agent too
       ],
       memory: createWorkerMemory("data"),
       hooks: createWorkerHooks("data"),
@@ -1024,14 +982,20 @@ export const createWorkerAgents = async () => {
 
     // Cloud worker agent - NEW
     const cloudWorker = new Agent({
-      name: "AI-Volt-Cloud",
-      instructions: workerPrompts.cloud(),
+      name: "CloudAgent",
+      purpose: "Manages cloud resources, deployment, and monitoring, interacting with Docker.",
+      instructions: workerPrompts.generate("cloud")(),
       llm: new VercelAIProvider(),
       model: google("gemini-2.0-flash"),
       tools: [
         deployServiceTool,
-        manageResourcesTool,
-        monitorCloudTool,
+        listContainersTool,
+        stopContainerTool,
+        removeContainerTool,
+        getContainerLogsTool,
+        inspectContainerTool,
+        listImagesTool,
+        buildImageTool,
       ],
       memory: createWorkerMemory("cloud"),
       hooks: createWorkerHooks("cloud"),

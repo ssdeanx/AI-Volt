@@ -1,499 +1,416 @@
 /**
- * Enhanced Git Toolkit with isolated-vm and shelljs Integration
- * Demonstrates secure Git operations using isolated-vm for sandboxing and shelljs for cross-platform compatibility
+ * Enhanced Git Toolkit with isomorphic-git, isolated-vm, and shelljs
+ * This toolkit provides secure and cross-platform Git operations.
+ * - `isomorphic-git` is used for core Git commands to avoid shell execution.
+ * - `isolated-vm` provides a secure sandbox for running Git automation scripts.
+ * - `shelljs` is used for general file system interactions.
  */
 import { createTool, createToolkit, type Toolkit } from '@voltagent/core';
 import { z } from 'zod';
 import { logger } from '../config/logger.js';
 import ivm from 'isolated-vm';
 import * as shell from 'shelljs';
-import { simpleGit, SimpleGit } from 'simple-git';
+import git from 'isomorphic-git';
+import http from 'isomorphic-git/http/node';
+import fs from 'fs';
+import path from 'path';
+
 
 // Initialize shell with secure defaults
 shell.config.silent = true; // Suppress output to console
 shell.config.fatal = false; // Don't exit on command failure
 
-const git: SimpleGit = simpleGit();
+/**
+ * Executes a Git operation within a repository path.
+ * This helper function standardizes directory management for isomorphic-git.
+ */
+async function executeInRepo<T>(
+  repoPath: string | undefined,
+  callback: (options: { fs: typeof fs; dir: string; http: typeof http }) => Promise<T>
+): Promise<T> {
+  const dir = path.resolve(process.cwd(), repoPath || '.');
+  if (!fs.existsSync(path.join(dir, '.git'))) {
+    throw new Error(`Not a Git repository: ${dir}`);
+  }
+  return callback({ fs, dir, http });
+}
 
 /**
- * Enhanced Git Status Tool with shelljs
- * Uses shelljs for cross-platform Git command execution with better error handling
+ * Enhanced Git Status Tool using isomorphic-git
+ * Provides structured Git status information without executing shell commands.
  */
 const enhancedGitStatusSchema = z.object({
-  path: z.string().optional().describe('Optional path to check status for specific directory'),
-  includeUntrackedFiles: z.boolean().default(true).describe('Include untracked files in status'),
-  porcelain: z.boolean().default(false).describe('Use porcelain format for machine-readable output'),
+  path: z.string().optional().describe('Optional path to the repository'),
 });
 
 type EnhancedGitStatusInput = z.infer<typeof enhancedGitStatusSchema>;
 
-const enhancedGitStatusTool = createTool({
+export const enhancedGitStatusTool = createTool({
   name: 'enhanced_git_status',
-  description: 'Enhanced Git status using shelljs for cross-platform compatibility and better error handling.',
+  description: 'Get a structured Git status using isomorphic-git for safety and reliability.',
   parameters: enhancedGitStatusSchema,
-  execute: async ({ path, includeUntrackedFiles, porcelain }: EnhancedGitStatusInput) => {
-    logger.info('[enhancedGitStatusTool] Getting enhanced Git status', { path, includeUntrackedFiles, porcelain });
-    
+  execute: async ({ path }: EnhancedGitStatusInput) => {
+    logger.info('[enhancedGitStatusTool] Getting status', { path });
     try {
-      // Use shelljs for cross-platform command execution
-      const oldCwd = shell.pwd().toString();
-      
-      if (path) {
-        if (!shell.test('-d', path)) {
-          throw new Error(`Directory does not exist: ${path}`);
-        }
-        shell.cd(path);
-      }
-
-      // Build Git status command with options
-      let statusCmd = 'git status';
-      if (porcelain) {
-        statusCmd += ' --porcelain';
-      }
-      if (!includeUntrackedFiles) {
-        statusCmd += ' --ignored=no';
-      }
-
-      const result = shell.exec(statusCmd, { silent: true });
-      
-      // Restore original directory
-      shell.cd(oldCwd);
-
-      if (result.code !== 0) {
-        throw new Error(`Git status failed: ${result.stderr}`);
-      }
-
-      // Also use simple-git for structured data
-      const statusData = await git.status(path ? [path] : []);
+      return await executeInRepo(path, async ({ fs, dir }) => {
+        const status = await git.statusMatrix({ fs, dir });
+        const modified = status.filter(([, , workdir]) => workdir === 2).map(([filepath]) => filepath);
+        const staged = status.filter(([, head]) => (head as any) === 2).map(([filepath]) => filepath);
+        const untracked = status.filter(([, , workdir]) => workdir === 0).map(([filepath]) => filepath);
 
       return {
-        shellOutput: result.stdout,
-        porcelain,
-        includeUntrackedFiles,
-        path: path || process.cwd(),
-        structured: {
-          current: statusData.current,
-          tracking: statusData.tracking,
-          ahead: statusData.ahead,
-          behind: statusData.behind,
-          modified: statusData.modified,
-          staged: statusData.staged,
-          created: statusData.created,
-          deleted: statusData.deleted,
-          renamed: statusData.renamed,
-          conflicted: statusData.conflicted,
-          not_added: statusData.not_added,
-          isClean: statusData.isClean(),
-        }
-      };
-    } catch (error) {
-      logger.error('[enhancedGitStatusTool] Failed to get enhanced status', { 
-        path, includeUntrackedFiles, porcelain, error: (error as Error).message 
+          isClean: modified.length === 0 && staged.length === 0 && untracked.length === 0,
+          modified,
+          staged,
+          untracked,
+          path: dir,
+        };
       });
-      throw new Error(`Enhanced Git status failed: ${(error as Error).message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[enhancedGitStatusTool] Failed', { path, error: errorMessage });
+      throw new Error(`Failed to get Git status: ${errorMessage}`);
     }
-  }
+  },
 });
 
 /**
- * Secure Git Script Executor using isolated-vm
- * Safely executes user-provided Git automation scripts in an isolated environment
+ * Secure Git Script Executor using isolated-vm and isomorphic-git
+ * Safely executes user-provided Git automation scripts in a sandboxed environment.
  */
 const secureGitScriptSchema = z.object({
-  script: z.string().describe('JavaScript code to execute in isolated environment for Git automation'),
-  timeout: z.number().min(1000).max(30000).default(10000).describe('Script execution timeout in milliseconds'),
-  gitCommands: z.array(z.string()).optional().describe('Pre-approved Git commands that the script can execute'),
+  script: z.string().describe('JavaScript code with Git operations to execute in the sandbox'),
+  timeout: z.number().min(1000).max(30000).default(10000).describe('Execution timeout in ms'),
+  repoPath: z.string().optional().describe('Path to the repository'),
 });
 
 type SecureGitScriptInput = z.infer<typeof secureGitScriptSchema>;
 
-const secureGitScriptTool = createTool({
+export const secureGitScriptTool = createTool({
   name: 'secure_git_script',
-  description: 'Execute Git automation scripts in a secure isolated environment using isolated-vm.',
+  description: 'Execute Git automation scripts in a secure sandbox with isomorphic-git.',
   parameters: secureGitScriptSchema,
-  execute: async ({ script, timeout, gitCommands }: SecureGitScriptInput) => {
-    logger.info('[secureGitScriptTool] Executing secure Git script', { 
-      scriptLength: script.length, timeout, approvedCommands: gitCommands?.length || 0 
-    });
+  execute: async ({ script, timeout, repoPath }: SecureGitScriptInput) => {
+    logger.info('[secureGitScriptTool] Executing script', { scriptLength: script.length, timeout });
     
+    const isolate = new ivm.Isolate({ memoryLimit: 64 });
+    const context = await isolate.createContext();
+    const jail = context.global;
+
     try {
-      // Create an isolated VM context
-      const isolate = new ivm.Isolate({ memoryLimit: 32 }); // 32MB memory limit
-      const context = await isolate.createContext();
-      const global = context.global;
-
-      // Prepare a secure execution environment
-      await global.set('console', {
-        log: (...args: any[]) => logger.info('[secureScript]', args),
-        error: (...args: any[]) => logger.error('[secureScript]', args),
-        warn: (...args: any[]) => logger.warn('[secureScript]', args),
+      // Set up a secure environment
+      await jail.set('global', jail.derefInto());
+      await jail.set('console', {
+        log: new ivm.Reference((...args: any[]) => logger.info('[secureScript]', args)),
+        error: new ivm.Reference((...args: any[]) => logger.error('[secureScript]', args)),
       });
 
-      // Create a safe Git command executor
-      await global.set('gitExec', async (command: string) => {
-        if (gitCommands && !gitCommands.includes(command)) {
-          throw new Error(`Git command not approved: ${command}`);
-        }
-        
-        const result = shell.exec(`git ${command}`, { silent: true });
-        return {
-          code: result.code,
-          stdout: result.stdout,
-          stderr: result.stderr,
-          success: result.code === 0
-        };
-      });
-
-      // Provide utility functions
-      await global.set('utils', {
-        getCurrentDir: () => shell.pwd().toString(),
-        fileExists: (path: string) => shell.test('-f', path),
-        dirExists: (path: string) => shell.test('-d', path),
-      });
-
-      // Execute the script with timeout
-      const scriptPromise = context.eval(script);
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Script execution timeout')), timeout);
-      });
-
-      const result = await Promise.race([scriptPromise, timeoutPromise]);
-      
-      // Clean up
-      isolate.dispose();
-
-      return {
-        result,
-        executionTime: Date.now(),
-        success: true,
-        approvedCommands: gitCommands || [],
+      // Expose a limited, secure set of isomorphic-git functions
+      const gitAPI = {
+        log: new ivm.Reference(async (options: object) =>
+          executeInRepo(repoPath, ({ fs, dir }) => git.log({ fs, dir, ...options }))
+        ),
+        statusMatrix: new ivm.Reference(async (options: object) =>
+          executeInRepo(repoPath, ({ fs, dir }) => git.statusMatrix({ fs, dir, ...options }))
+        ),
+        commit: new ivm.Reference(async (options: object) =>
+            executeInRepo(repoPath, ({ fs, dir }) => git.commit({ fs, dir, ...options }))
+        ),
+        add: new ivm.Reference(async (options: { filepath: string }) =>
+            executeInRepo(repoPath, ({ fs, dir }) => git.add({ fs, dir, ...options }))
+        ),
       };
+      await jail.set('git', new ivm.Reference(gitAPI));
+      
+      const untrustedScript = await isolate.compileScript(script);
+      const result = await untrustedScript.run(context, { timeout });
+
+      return { success: true, result };
     } catch (error) {
-      logger.error('[secureGitScriptTool] Script execution failed', { 
-        script: script.substring(0, 100) + '...', error: (error as Error).message 
-      });
-      throw new Error(`Secure Git script execution failed: ${(error as Error).message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[secureGitScriptTool] Execution failed', { error: errorMessage });
+      throw new Error(`Script execution failed: ${errorMessage}`);
+    } finally {
+      isolate.dispose();
     }
-  }
+  },
 });
 
 /**
- * Cross-Platform Git Repository Analysis Tool
- * Uses shelljs for file system operations and Git analysis across different platforms
+ * Cross-Platform Git Repository Analysis Tool using isomorphic-git and shelljs
+ * Analyzes repository details safely without relying on shell commands for Git info.
  */
 const gitRepositoryAnalysisSchema = z.object({
   path: z.string().default('.').describe('Repository path to analyze'),
-  includeFileStats: z.boolean().default(true).describe('Include file statistics in analysis'),
-  analyzeBranches: z.boolean().default(true).describe('Analyze branch information'),
-  checkRemotes: z.boolean().default(true).describe('Check remote repository information'),
+  includeFileStats: z.boolean().default(false).describe('Use shelljs to include file statistics'),
 });
 
 type GitRepositoryAnalysisInput = z.infer<typeof gitRepositoryAnalysisSchema>;
 
-const gitRepositoryAnalysisTool = createTool({
+export const gitRepositoryAnalysisTool = createTool({
   name: 'git_repository_analysis',
-  description: 'Comprehensive Git repository analysis using cross-platform shelljs operations.',
+  description: 'Comprehensive Git repository analysis using isomorphic-git and shelljs.',
   parameters: gitRepositoryAnalysisSchema,
-  execute: async ({ path, includeFileStats, analyzeBranches, checkRemotes }: GitRepositoryAnalysisInput) => {
-    logger.info('[gitRepositoryAnalysisTool] Analyzing Git repository', { 
-      path, includeFileStats, analyzeBranches, checkRemotes 
-    });
+  execute: async ({ path: repoPath, includeFileStats }: GitRepositoryAnalysisInput) => {
+    logger.info('[gitRepositoryAnalysisTool] Analyzing repository', { repoPath, includeFileStats });
     
     try {
-      const oldCwd = shell.pwd().toString();
-      
-      // Validate and change to target directory
-      if (!shell.test('-d', path)) {
-        throw new Error(`Directory does not exist: ${path}`);
-      }
-      shell.cd(path);
-
-      // Check if it's a Git repository
-      if (!shell.test('-d', '.git')) {
-        throw new Error('Not a Git repository');
-      }
+      return await executeInRepo(repoPath, async ({ fs, dir }) => {
+        const [branches, remotes, log] = await Promise.all([
+          git.listBranches({ fs, dir }),
+          git.listRemotes({ fs, dir }),
+          git.log({ fs, dir, depth: 1 }),
+        ]);
 
       const analysis: any = {
-        repositoryPath: shell.pwd().toString(),
-        timestamp: new Date().toISOString(),
-      };
+          repositoryPath: dir,
+          branches,
+          remotes,
+          latestCommit: log[0]?.oid,
+        };
 
-      // Basic repository information
-      const configResult = shell.exec('git config --get remote.origin.url', { silent: true });
-      if (configResult.code === 0) {
-        analysis.remoteUrl = configResult.stdout.trim();
-      }
-
-      // File statistics using shelljs
       if (includeFileStats) {
-        const files = shell.find('.').filter((file: string) => {
-          return shell.test('-f', file) && !file.includes('.git/');
-        });
+          const files = shell.find(dir).filter((file: string) => 
+            fs.statSync(file).isFile() && !file.includes(path.join(dir, '.git'))
+          );
         
         analysis.fileStats = {
           totalFiles: files.length,
-          fileTypes: {},
-          largestFiles: [],
-        };
-
-        // Analyze file types
-        files.forEach((file: string) => {
-          const ext = file.split('.').pop() || 'no-extension';
-          analysis.fileStats.fileTypes[ext] = (analysis.fileStats.fileTypes[ext] || 0) + 1;
-        });        // Find largest files (cross-platform)
-        const fileSizes = files.map((file: string) => {
-          const stats = shell.ls('-l', file);
-          return { file, size: stats.length || 0 };
-        }).sort((a: { file: string; size: number }, b: { file: string; size: number }) => b.size - a.size).slice(0, 5);
-        
-        analysis.fileStats.largestFiles = fileSizes;
-      }
-
-      // Branch analysis
-      if (analyzeBranches) {
-        const branchResult = shell.exec('git branch -a', { silent: true });        if (branchResult.code === 0) {
-          analysis.branches = {
-            all: branchResult.stdout.split('\n').filter(Boolean).map((b: string) => b.trim()),
-            current: null,
-            total: 0,
+            fileTypes: files.reduce((acc: Record<string, number>, file: string) => {
+              const ext = path.extname(file) || '.noextension';
+              acc[ext] = (acc[ext] || 0) + 1;
+              return acc;
+            }, {}),
           };
-          
-          const currentBranch = analysis.branches.all.find((b: string) => b.startsWith('*'));
-          if (currentBranch) {
-            analysis.branches.current = currentBranch.replace('*', '').trim();
-          }
-          analysis.branches.total = analysis.branches.all.length;
         }
-      }
-
-      // Remote analysis
-      if (checkRemotes) {
-        const remoteResult = shell.exec('git remote -v', { silent: true });
-        if (remoteResult.code === 0) {
-          analysis.remotes = remoteResult.stdout.split('\n').filter(Boolean);
-        }
-      }
-
-      // Commit statistics
-      const commitCountResult = shell.exec('git rev-list --count HEAD', { silent: true });
-      if (commitCountResult.code === 0) {
-        analysis.totalCommits = parseInt(commitCountResult.stdout.trim(), 10);
-      }
-
-      // Recent commit info
-      const recentCommitResult = shell.exec('git log -1 --pretty=format:"%H|%an|%ae|%ad|%s"', { silent: true });
-      if (recentCommitResult.code === 0) {
-        const parts = recentCommitResult.stdout.split('|');
-        analysis.lastCommit = {
-          hash: parts[0],
-          author: parts[1],
-          email: parts[2],
-          date: parts[3],
-          message: parts[4],
-        };
-      }
-
-      // Restore original directory
-      shell.cd(oldCwd);
 
       return analysis;
-    } catch (error) {
-      // Ensure we restore directory even on error
-      shell.cd(shell.pwd().toString());
-      logger.error('[gitRepositoryAnalysisTool] Analysis failed', { 
-        path, error: (error as Error).message 
       });
-      throw new Error(`Git repository analysis failed: ${(error as Error).message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[gitRepositoryAnalysisTool] Failed', { repoPath, error: errorMessage });
+      throw new Error(`Repository analysis failed: ${errorMessage}`);
     }
-  }
+  },
 });
 
 /**
- * Isolated Git Hook Validator
- * Validates Git hooks safely in an isolated environment
+ * Adds file contents to the staging area.
  */
-const gitHookValidatorSchema = z.object({
-  hookType: z.enum(['pre-commit', 'post-commit', 'pre-push', 'post-receive']).describe('Type of Git hook to validate'),
-  hookScript: z.string().describe('Hook script content to validate'),
-  validateOnly: z.boolean().default(true).describe('Only validate, do not execute the hook'),
+const gitAddSchema = z.object({
+  repoPath: z.string().optional().describe('Path to the repository.'),
+  filepath: z.union([z.string(), z.array(z.string())]).describe('A single file or an array of files to add.'),
 });
-
-type GitHookValidatorInput = z.infer<typeof gitHookValidatorSchema>;
-
-const gitHookValidatorTool = createTool({
-  name: 'git_hook_validator',
-  description: 'Validate Git hooks safely in an isolated environment using isolated-vm.',
-  parameters: gitHookValidatorSchema,
-  execute: async ({ hookType, hookScript, validateOnly }: GitHookValidatorInput) => {
-    logger.info('[gitHookValidatorTool] Validating Git hook', { 
-      hookType, scriptLength: hookScript.length, validateOnly 
-    });
-    
-    try {
-      // Create isolated VM for validation
-      const isolate = new ivm.Isolate({ memoryLimit: 16 });
-      const context = await isolate.createContext();
-      const global = context.global;
-
-      // Provide safe environment for hook validation
-      await global.set('hookType', hookType);
-      await global.set('console', {
-        log: (...args: any[]) => logger.info(`[hook-${hookType}]`, args),
-        error: (...args: any[]) => logger.error(`[hook-${hookType}]`, args),
-      });
-
-      // Mock Git environment variables commonly used in hooks
-      await global.set('env', {
-        GIT_DIR: '.git',
-        GIT_WORK_TREE: '.',
-        GIT_INDEX_FILE: '.git/index',
-      });
-
-      // Provide safe utilities
-      await global.set('utils', {
-        validateScript: (script: string) => {
-          // Basic script validation
-          const forbidden = ['rm -rf', 'sudo', 'exec', 'eval'];
-          return !forbidden.some(cmd => script.includes(cmd));
-        },
-        getHookType: () => hookType,
-      });
-
-      // Validation script
-      const validationScript = `
-        (function() {
-          try {
-            // Basic syntax check
-            const syntaxCheck = Function('return true');
-            
-            // Hook-specific validation
-            const validations = {
-              'pre-commit': () => {
-                console.log('Validating pre-commit hook');
-                return { valid: true, message: 'Pre-commit hook syntax valid' };
-              },
-              'post-commit': () => {
-                console.log('Validating post-commit hook');
-                return { valid: true, message: 'Post-commit hook syntax valid' };
-              },
-              'pre-push': () => {
-                console.log('Validating pre-push hook');
-                return { valid: true, message: 'Pre-push hook syntax valid' };
-              },
-              'post-receive': () => {
-                console.log('Validating post-receive hook');
-                return { valid: true, message: 'Post-receive hook syntax valid' };
-              }
-            };
-            
-            const validator = validations[hookType];
-            if (!validator) {
-              return { valid: false, message: 'Unknown hook type' };
-            }
-            
-            return validator();
-          } catch (error) {
-            return { valid: false, message: error.message };
-          }
-        })();
-      `;
-
-      const validationResult = await context.eval(validationScript);
-      
-      isolate.dispose();      // Additional shelljs-based checks for the hook file
-      let fileSystemChecks = null;
-      if (!validateOnly) {
-        const hookPath = `.git/hooks/${hookType}`;
-        fileSystemChecks = {
-          hookExists: shell.test('-f' as any, hookPath),
-          isExecutable: shell.test('-f' as any, hookPath) && shell.test('-r' as any, hookPath),
-          canRead: shell.test('-r' as any, hookPath),
-        };
+export const gitAddTool = createTool({
+  name: 'git_add',
+  description: 'Add file contents to the staging area.',
+  parameters: gitAddSchema,
+  execute: async ({ repoPath, filepath }) => {
+    logger.info('[gitAddTool]', { repoPath, filepath });
+    const files = Array.isArray(filepath) ? filepath : [filepath];
+    return executeInRepo(repoPath, async ({ fs, dir }) => {
+      for (const file of files) {
+        await git.add({ fs, dir, filepath: file });
       }
-
-      return {
-        hookType,
-        validation: validationResult,
-        fileSystemChecks,
-        validateOnly,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      logger.error('[gitHookValidatorTool] Hook validation failed', { 
-        hookType, error: (error as Error).message 
-      });
-      throw new Error(`Git hook validation failed: ${(error as Error).message}`);
-    }
-  }
+      return { success: true, added: files };
+    });
+  },
 });
 
 /**
- * Enhanced Git Toolkit combining all enhanced tools
+ * Commits staged changes.
  */
-const enhancedGitToolkit: Toolkit = createToolkit({
-  name: 'enhanced_git_toolkit',
-  description: 'Enhanced Git operations toolkit with isolated-vm security and shelljs cross-platform compatibility.',
-  instructions: `
-You have access to an enhanced Git toolkit that provides advanced features beyond basic Git operations:
+const gitCommitSchema = z.object({
+  repoPath: z.string().optional().describe('Path to the repository.'),
+  message: z.string().describe('The commit message.'),
+  author: z.object({
+    name: z.string().describe('The author\'s name.'),
+    email: z.string().describe('The author\'s email.'),
+  }).optional().describe('The author of the commit.'),
+});
+export const gitCommitTool = createTool({
+  name: 'git_commit',
+  description: 'Records staged changes to the repository.',
+  parameters: gitCommitSchema,
+  execute: async ({ repoPath, message, author }) => {
+    logger.info('[gitCommitTool]', { repoPath, message });
+    return executeInRepo(repoPath, async ({ fs, dir }) => {
+      const commitOptions = {
+        fs,
+        dir,
+        message,
+        author: author || { name: 'AI-Volt Agent', email: 'agent@ai-volt.com' },
+      };
+      const sha = await git.commit(commitOptions);
+      return { success: true, sha };
+    });
+  },
+});
 
-**Enhanced Features:**
-1. **Cross-Platform Compatibility**: Uses shelljs for reliable Git operations across Windows, macOS, and Linux
-2. **Secure Script Execution**: Execute Git automation scripts safely in isolated environments using isolated-vm
-3. **Comprehensive Analysis**: Deep repository analysis with file statistics and cross-platform compatibility
-4. **Hook Validation**: Safely validate Git hooks without executing potentially harmful code
+/**
+ * Pushes commits to a remote repository.
+ */
+const gitPushSchema = z.object({
+  repoPath: z.string().optional().describe('Path to the repository.'),
+  remote: z.string().default('origin').describe('The name of the remote to push to.'),
+  ref: z.string().optional().describe('The local branch or ref to push.'),
+  force: z.boolean().default(false).describe('Whether to force the push.'),
+});
+export const gitPushTool = createTool({
+  name: 'git_push',
+  description: 'Push commits to a remote repository.',
+  parameters: gitPushSchema,
+  execute: async ({ repoPath, remote, ref, force }) => {
+    logger.info('[gitPushTool]', { repoPath, remote, ref, force });
+    return executeInRepo(repoPath, async ({ fs, dir, http }) => {
+      const result = await git.push({ fs, dir, http, remote, ref, force });
+      return { success: result.ok, result };
+    });
+  },
+});
 
-**Available Tools:**
+/**
+ * Fetches changes from a remote repository.
+ */
+const gitFetchSchema = z.object({
+    repoPath: z.string().optional().describe('Path to the repository.'),
+    remote: z.string().default('origin').describe('The name of the remote to fetch from.'),
+    ref: z.string().optional().describe('A single ref to fetch.'),
+});
+export const gitFetchTool = createTool({
+    name: 'git_fetch',
+    description: 'Download objects and refs from another repository.',
+    parameters: gitFetchSchema,
+    execute: async ({ repoPath, remote, ref }) => {
+        logger.info('[gitFetchTool]', { repoPath, remote, ref });
+        return executeInRepo(repoPath, async ({ fs, dir, http }) => {
+            const result = await git.fetch({ fs, dir, http, remote, ref });
+            return { success: true, result };
+        });
+    },
+});
 
-1. **enhanced_git_status**: Cross-platform Git status with additional options
-   - Uses shelljs for better error handling and platform compatibility
-   - Supports porcelain format and untracked file options
-   - Provides both raw output and structured data
+/**
+ * Pulls changes from a remote (fetch + merge).
+ */
+const gitPullSchema = z.object({
+    repoPath: z.string().optional().describe('Path to the repository.'),
+    remote: z.string().default('origin').describe('The remote to pull from.'),
+    ref: z.string().describe('The branch to pull.'),
+    author: z.object({
+        name: z.string(),
+        email: z.string(),
+    }).optional(),
+});
+export const gitPullTool = createTool({
+    name: 'git_pull',
+    description: 'Fetch from and integrate with another repository or a local branch.',
+    parameters: gitPullSchema,
+    execute: async ({ repoPath, remote, ref, author }) => {
+        logger.info('[gitPullTool]', { repoPath, remote, ref });
+        return executeInRepo(repoPath, async ({ fs, dir, http }) => {
+            await git.pull({
+                fs,
+                dir,
+                http,
+                ref,
+                remote,
+                author: author || { name: 'AI-Volt Agent', email: 'agent@ai-volt.com' },
+            });
+            return { success: true, message: `Successfully pulled ${ref} from ${remote}.` };
+        });
+    },
+});
 
-2. **secure_git_script**: Execute Git automation scripts in isolated environment
-   - Runs user scripts in secure isolated-vm sandbox
-   - Memory and execution time limits for safety
-   - Pre-approved command whitelist for security
-   - Safe utilities for file system checks
+/**
+ * Merges a branch into the current branch.
+ */
+const gitMergeSchema = z.object({
+    repoPath: z.string().optional().describe('Path to the repository.'),
+    theirBranch: z.string().describe('The branch to merge into the current one.'),
+    author: z.object({
+        name: z.string(),
+        email: z.string(),
+    }).optional(),
+});
+export const gitMergeTool = createTool({
+    name: 'git_merge',
+    description: 'Join two or more development histories together.',
+    parameters: gitMergeSchema,
+    execute: async ({ repoPath, theirBranch, author }) => {
+        logger.info('[gitMergeTool]', { repoPath, theirBranch });
+        return executeInRepo(repoPath, async ({ fs, dir }) => {
+            const result = await git.merge({
+                fs,
+                dir,
+                theirs: theirBranch,
+                author: author || { name: 'AI-Volt Agent', email: 'agent@ai-volt.com' },
+            });
+            return { success: true, result };
+        });
+    },
+});
 
-3. **git_repository_analysis**: Comprehensive repository analysis
-   - Cross-platform file statistics using shelljs
-   - Branch and remote analysis
-   - Commit history and recent activity
-   - File type distribution and size analysis
+/**
+ * Creates a new branch.
+ */
+const gitBranchSchema = z.object({
+    repoPath: z.string().optional().describe('Path to the repository.'),
+    ref: z.string().describe('The name of the branch to create.'),
+    checkout: z.boolean().default(false).describe('Whether to checkout the new branch after creating it.'),
+});
+export const gitBranchTool = createTool({
+    name: 'git_branch',
+    description: 'Create a new branch.',
+    parameters: gitBranchSchema,
+    execute: async ({ repoPath, ref, checkout }) => {
+        logger.info('[gitBranchTool]', { repoPath, ref, checkout });
+        return executeInRepo(repoPath, async ({ fs, dir }) => {
+            await git.branch({ fs, dir, ref, checkout });
+            return { success: true, branch: ref };
+        });
+    },
+});
 
-4. **git_hook_validator**: Safely validate Git hooks
-   - Validates hook scripts in isolated environment
-   - Supports all common Git hook types
-   - File system checks for existing hooks
-   - Syntax and security validation
+/**
+ * Clones a repository into a new directory.
+ */
+export const gitCloneTool = createTool({
+    name: 'git_clone',
+    description: 'Clone a repository into a new directory.',
+    parameters: z.object({
+        repoPath: z.string().describe('The directory to clone into.'),
+        url: z.string().describe('The URL of the repository to clone.'),
+        ref: z.string().optional().describe("The name of the branch to clone. Defaults to the remote's default branch."),
+        singleBranch: z.boolean().default(true).describe('Only clone a single branch.'),
+        depth: z.number().optional().describe('Create a shallow clone with a history truncated to the specified number of commits.'),
+    }),
+    execute: async ({ repoPath, url, ref, singleBranch, depth }) => {
+        logger.info('[gitCloneTool]', { repoPath, url });
+        const dir = path.resolve(process.cwd(), repoPath);
+        await git.clone({ fs, http, dir, url, ref, singleBranch, depth });
+        return { success: true, path: dir };
+    },
+});
 
-**Security Benefits:**
-- All script execution happens in isolated-vm with memory limits
-- Cross-platform operations use shelljs for reliability
-- Input validation and sanitization on all parameters
-- Safe environment for testing potentially unsafe Git operations
-
-**Use Cases:**
-- Repository health checks and analysis
-- Safe automation script development
-- Cross-platform Git operations
-- Git hook development and validation
-- Secure CI/CD pipeline integration
-  `,
-  addInstructions: true,
+/**
+ * Enhanced Git Toolkit
+ * A collection of secure, cross-platform Git tools.
+ */
+export const enhancedGitToolkit: Toolkit = createToolkit({
+  name: 'Enhanced Git Toolkit',
+  description: 'A suite of advanced Git tools using isomorphic-git for security and shelljs for file operations.',
   tools: [
     enhancedGitStatusTool as any,
     secureGitScriptTool as any,
     gitRepositoryAnalysisTool as any,
-    gitHookValidatorTool as any,
+    gitAddTool as any,
+    gitCommitTool as any,
+    gitPushTool as any,
+    gitFetchTool as any,
+    gitPullTool as any,
+    gitMergeTool as any,
+    gitBranchTool as any,
+    gitCloneTool as any,
   ],
 });
-
-// Exports
-export {
-  enhancedGitStatusTool,
-  secureGitScriptTool,
-  gitRepositoryAnalysisTool,
-  gitHookValidatorTool,
-  enhancedGitToolkit
-};

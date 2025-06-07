@@ -3,7 +3,7 @@ import type { ToolExecuteOptions, ToolExecutionContext } from "@voltagent/core";
 import {
   ensureBrowser,
   resetBrowserState as resetBrowserStateInternal,
-} from "./playwrightToolHandler";
+} from "./playwrightToolHandler.js";
 
 /**
  * Safe browser operation function to handle errors consistently across all browser tools

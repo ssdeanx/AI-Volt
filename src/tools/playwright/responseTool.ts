@@ -5,8 +5,9 @@
 
 import { z } from "zod";
 import { createTool, type ToolExecuteOptions } from "@voltagent/core";
-import { safeBrowserOperation } from "./browserBaseTools";
+import { safeBrowserOperation } from "./browserBaseTools.js";
 import type { ToolExecutionContext } from "@voltagent/core";
+import type { Page, Response } from "playwright";
 
 /**
  * Tool for setting up response wait operations
@@ -31,7 +32,7 @@ export const expectResponseTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       try {
         const response = await page.waitForResponse(args.urlPattern, {
           timeout: args.timeout,
@@ -56,6 +57,41 @@ export const expectResponseTool = createTool({
     });
   },
 });
+
+async function performAssertions(
+  targetResponse: Response,
+  args: { expectedStatus?: number; expectedBodyContains?: string }
+): Promise<{ assertionsPassed: boolean; failureMessages: string[] }> {
+  const failureMessages: string[] = [];
+
+  // Assert Status Code
+  if (args.expectedStatus !== undefined) {
+    if (targetResponse.status() !== args.expectedStatus) {
+      failureMessages.push(
+        `Expected status ${args.expectedStatus}, but got ${targetResponse.status()}.`,
+      );
+    }
+  }
+
+  // Assert Body Content
+  if (args.expectedBodyContains !== undefined) {
+    try {
+      const body = await targetResponse.text();
+      if (!body.includes(args.expectedBodyContains)) {
+        failureMessages.push(`Response body did not contain "${args.expectedBodyContains}".`);
+      }
+    } catch (error) {
+      failureMessages.push(
+        `Failed to read response body: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  return {
+    assertionsPassed: failureMessages.length === 0,
+    failureMessages,
+  };
+}
 
 /**
  * Tool for asserting and validating responses
@@ -86,8 +122,8 @@ export const assertResponseTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
-      let targetResponse: any = null; // Consider using Playwright's Response type
+    return safeBrowserOperation(context, async (page: Page) => {
+      let targetResponse: Response | null = null;
 
       if (args.urlPattern) {
         // Wait for a specific response if pattern provided
@@ -113,34 +149,7 @@ export const assertResponseTool = createTool({
         };
       }
 
-      let assertionsPassed = true;
-      let failureMessages: string[] = [];
-
-      // Assert Status Code
-      if (args.expectedStatus !== undefined) {
-        if (targetResponse.status() !== args.expectedStatus) {
-          assertionsPassed = false;
-          failureMessages.push(
-            `Expected status ${args.expectedStatus}, but got ${targetResponse.status()}.`,
-          );
-        }
-      }
-
-      // Assert Body Content
-      if (args.expectedBodyContains !== undefined) {
-        try {
-          const body = await targetResponse.text();
-          if (!body.includes(args.expectedBodyContains)) {
-            assertionsPassed = false;
-            failureMessages.push(`Response body did not contain "${args.expectedBodyContains}".`);
-          }
-        } catch (error) {
-          assertionsPassed = false;
-          failureMessages.push(
-            `Failed to read response body: ${error instanceof Error ? error.message : error}`,
-          );
-        }
-      }
+      const { assertionsPassed, failureMessages } = await performAssertions(targetResponse, args);
 
       return {
         result: assertionsPassed

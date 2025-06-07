@@ -1,4 +1,3 @@
-
 /**
  * AI-Volt - Advanced AI Agent with Supervisor/Worker Architecture
  * Main application entry point with multi-agent coordination
@@ -7,12 +6,17 @@
  */
 
 import { VoltAgent, VoltAgentExporter } from "@voltagent/core";
+
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { createAIVoltAgent, createSupervisorAgent, createWorkerAgents } from "./agents/index.js";
 // Removed: import { allTools, toolCategories } from "./tools/index.js"; 
 // Assuming toolCategories are no longer needed here as agent creation functions handle tools.
 import { logger } from "./config/logger.js";
 import { env } from "./config/environment.js";
 import { factCheckerAgent } from "./agents/subAgents.js";
+import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
+
 /**
  * Initialize and start the AI-Volt application with supervisor/worker pattern
  */
@@ -59,10 +63,17 @@ async function startAIVolt(): Promise<void> {
       telemetryExporter: new VoltAgentExporter({
         publicKey: env.PK,
         secretKey: env.SK,
-        baseUrl: "https://api.voltagent.dev",
+        baseUrl: "https://api.voltagent.dev"
       }),
     });
-
+    
+    // Initialize OpenTelemetry SDK
+    const sdk = new NodeSDK({
+      traceExporter: new ConsoleSpanExporter(),
+      instrumentations: [getNodeAutoInstrumentations()],
+    });
+    
+    sdk.start();
     // Fix: workerAgentKeysForLog is not defined, so use Object.keys(workerAgents)
     const workerAgentKeysForLog = Object.keys(workerAgents);
     // Instead of Object.keys(voltAgent.agents), use the keys we passed in

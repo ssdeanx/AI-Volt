@@ -97,6 +97,76 @@ class SupervisorContextStore {
   }
 
   /**
+   * Get all candidate IDs based on the provided filters.
+   * This function will create an intersection of all matching filter criteria.
+   */
+  private getFilteredCandidateIds(options: { type?: string; agentType?: string; tags?: string[] }): Set<string> {
+    const { type, agentType, tags } = options;
+    const idSets: Set<string>[] = [];
+
+    if (type && this.indexByType.has(type)) {
+      idSets.push(this.indexByType.get(type)!);
+    }
+    if (agentType && this.indexByAgent.has(agentType)) {
+      idSets.push(this.indexByAgent.get(agentType)!);
+    }
+    if (tags) {
+      for (const tag of tags) {
+        if (this.indexByTags.has(tag)) {
+          idSets.push(this.indexByTags.get(tag)!);
+        }
+      }
+    }
+
+    if (idSets.length === 0) {
+      // If no filters matched, return all keys.
+      return new Set(this.contexts.keys());
+    }
+
+    // Intersect all sets to get the final candidates
+    let candidates = new Set(idSets[0]);
+    for (let i = 1; i < idSets.length; i++) {
+      candidates = new Set([...candidates].filter(id => idSets[i].has(id)));
+    }
+    return candidates;
+  }
+
+  /**
+   * Calculate a relevance score for a given context entry against a query.
+   */
+  private calculateRelevance(context: ContextEntry, query: string): number {
+    const queryLower = query.toLowerCase();
+    const contentLower = context.content.toLowerCase();
+    const sourceLower = context.source.toLowerCase();
+    let score = 0;
+
+    // Exact phrase match gets highest score
+    if (contentLower.includes(queryLower)) {
+      score += 10;
+    }
+
+    // Word matches
+    const queryWords = queryLower.split(/\s+/);
+    for (const word of queryWords) {
+      if (word.length > 2) { // Skip very short words
+        if (contentLower.includes(word)) score += 2;
+        if (sourceLower.includes(word)) score += 1;
+      }
+    }
+
+    // Recency bonus (newer entries score higher)
+    const daysSinceCreation = (Date.now() - context.metadata.timestamp) / (1000 * 60 * 60 * 24);
+    score += Math.max(0, 5 - daysSinceCreation);
+
+    // Apply metadata relevance score if available
+    if (context.metadata.relevanceScore) {
+      score += context.metadata.relevanceScore;
+    }
+
+    return score;
+  }
+
+  /**
    * Search contexts based on query and filters
    */
   search(query: string, options: {
@@ -106,89 +176,31 @@ class SupervisorContextStore {
     limit?: number;
     minRelevanceScore?: number;
   } = {}): ContextEntry[] {
-    const { type, agentType, tags, limit = 10, minRelevanceScore = 0 } = options;
-    
-    let candidateIds = new Set<string>();
-    
-    // Start with all contexts if no specific filters
-    if (!type && !agentType && !tags) {
-      candidateIds = new Set(this.contexts.keys());
-    } else {
-      // Apply filters
-      if (type && this.indexByType.has(type)) {
-        candidateIds = new Set(this.indexByType.get(type)!);
-      }
-      
-      if (agentType && this.indexByAgent.has(agentType)) {
-        const agentIds = this.indexByAgent.get(agentType)!;
-        if (candidateIds.size === 0) {
-          candidateIds = new Set(agentIds);
-        } else {
-          candidateIds = new Set([...candidateIds].filter(id => agentIds.has(id)));
-        }
-      }
-      
-      if (tags && tags.length > 0) {
-        for (const tag of tags) {
-          if (this.indexByTags.has(tag)) {
-            const tagIds = this.indexByTags.get(tag)!;
-            if (candidateIds.size === 0) {
-              candidateIds = new Set(tagIds);
-            } else {
-              candidateIds = new Set([...candidateIds].filter(id => tagIds.has(id)));
-            }
-          }
-        }
-      }
-    }
+    const { limit = 10, minRelevanceScore = 0 } = options;
 
-    // Get contexts and calculate relevance scores
+    const candidateIds = this.getFilteredCandidateIds(options);
+
     const results: (ContextEntry & { score: number })[] = [];
-    const queryLower = query.toLowerCase();
-    
     for (const id of candidateIds) {
       const context = this.contexts.get(id);
       if (!context) continue;
-      
-      // Simple relevance scoring based on text matching
-      const contentLower = context.content.toLowerCase();
-      const sourceLower = context.source.toLowerCase();
-      
-      let score = 0;
-      
-      // Exact phrase match gets highest score
-      if (contentLower.includes(queryLower)) {
-        score += 10;
-      }
-      
-      // Word matches
-      const queryWords = queryLower.split(/\s+/);
-      for (const word of queryWords) {
-        if (word.length > 2) { // Skip very short words
-          if (contentLower.includes(word)) score += 2;
-          if (sourceLower.includes(word)) score += 1;
-        }
-      }
-      
-      // Recency bonus (newer entries score higher)
-      const daysSinceCreation = (Date.now() - context.metadata.timestamp) / (1000 * 60 * 60 * 24);
-      score += Math.max(0, 5 - daysSinceCreation);
-      
-      // Apply metadata relevance score if available
-      if (context.metadata.relevanceScore) {
-        score += context.metadata.relevanceScore;
-      }
-      
+
+      const score = this.calculateRelevance(context, query);
+
       if (score >= minRelevanceScore) {
         results.push({ ...context, score });
       }
     }
-    
+
     // Sort by score and limit results
-    return results
-      .sort((a, b) => b.score - a.score)
+    const sortedResults = [...results].sort((
+        a: ContextEntry & { score: number },
+        b: ContextEntry & { score: number }
+    ) => b.score - a.score);
+
+    return sortedResults
       .slice(0, limit)
-      .map(({ score: _score, ...context }) => context);
+      .map(({ score: _score, ...context }: ContextEntry & { score: number }) => context);
   }
 
   /**
@@ -358,20 +370,11 @@ export class SupervisorRetriever extends BaseRetriever {
       if (ctxs.length === 0) {
         result = `No relevant context found for "${query}".`;
       } else {
-        // Format grouped by type
-        const sections = ['## Retrieved Context', ''];
-        const byType = new Map<string, typeof ctxs>();
-        for (const c of ctxs) {
-          (byType.get(c.type) ?? byType.set(c.type, []).get(c.type)!).push(c);
-        }
-        for (const [type, entries] of byType) {
-          sections.push(`### ${type.toUpperCase()}`);
-          for (const e of entries) {
-            sections.push(`**${e.source}** - ${new Date(e.metadata.timestamp).toISOString()}`);
-            sections.push(e.content, '');
-          }
-        }
-        result = sections.join('\n');
+        // Format to be as token-efficient as possible
+        const formattedContexts = ctxs.map(c => 
+          `[${c.type}:${c.source}] ${c.content.replace(/\s+/g, ' ').trim()}`
+        );
+        result = `Retrieved Context:\n${formattedContexts.join('\n')}`;
       }
 
       // 3) Store in cache before returning
@@ -415,9 +418,10 @@ export class SupervisorRetriever extends BaseRetriever {
     duration?: number;
   }): void {
     try {
+      const truncatedResult = result.result.length > 200 ? `${result.result.substring(0, 200)}...` : result.result;
       const entry: ContextEntry = {
         id: generateId(),
-        content: `Task: ${result.task}\nResult: ${result.result}`,
+        content: `Task: ${result.task}\nResult: ${truncatedResult}`,
         source: `delegation-${result.agentType}`,
         type: 'delegation',
         metadata: {
@@ -467,7 +471,7 @@ export class SupervisorRetriever extends BaseRetriever {
       metadata: {
         timestamp: Date.now(),
         workflowId: workflow.workflowId,
-        relevanceScore: workflow.status === 'completed' ? 8 : workflow.status === 'failed' ? 3 : 5,
+        relevanceScore: this.getWorkflowRelevanceScore(workflow.status),
         tags: [
           workflow.status,
           'multi-agent',
@@ -497,9 +501,13 @@ export class SupervisorRetriever extends BaseRetriever {
     examples: string[];
     limitations?: string[];
   }): void {
+    let content = `Agent: ${capability.agentType}\nCapability: ${capability.capability}\nDescription: ${capability.description}\nExamples: ${capability.examples.join(', ')}`;
+    if (capability.limitations) {
+        content += `\nLimitations: ${capability.limitations.join(', ')}`;
+    }
     const entry: ContextEntry = {
       id: generateId(),
-      content: `Agent: ${capability.agentType}\nCapability: ${capability.capability}\nDescription: ${capability.description}\nExamples: ${capability.examples.join(', ')}${capability.limitations ? `\nLimitations: ${capability.limitations.join(', ')}` : ''}`,
+      content,
       source: `capability-${capability.agentType}`,
       type: 'agent_capability',
       metadata: {
@@ -588,6 +596,18 @@ export class SupervisorRetriever extends BaseRetriever {
     }
 
     return opts;
+  }
+
+  /**
+   * Get the relevance score for a workflow based on its status.
+   */
+  private getWorkflowRelevanceScore(status: 'started' | 'completed' | 'failed'): number {
+      switch (status) {
+          case 'completed': return 8;
+          case 'started': return 5;
+          case 'failed': return 3;
+          default: return 5;
+      }
   }
 }
 

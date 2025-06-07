@@ -6,9 +6,10 @@
 import { z } from "zod";
 import { createTool, type ToolExecuteOptions } from "@voltagent/core";
 import type { ToolExecutionContext } from "@voltagent/core";
-import { safeBrowserOperation } from "./browserBaseTools";
+import { safeBrowserOperation } from "./browserBaseTools.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { Page } from "playwright";
 
 /**
  * Tool for saving content to a file
@@ -94,7 +95,7 @@ export const exportPdfTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       // Ensure the directory exists asynchronously
       const dir = path.dirname(args.filename);
       try {
@@ -145,9 +146,9 @@ export const extractDataTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       const extractedData = await page.evaluate(
-        (params) => {
+        (params: { selectors: Record<string, string>, includeHtml: boolean }) => {
           const { selectors, includeHtml } = params;
           const result: Record<string, { text: string; html?: string }> = {};
 

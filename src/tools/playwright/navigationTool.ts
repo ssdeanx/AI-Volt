@@ -16,9 +16,9 @@
 
 import { z } from "zod";
 import { createTool, type ToolExecuteOptions } from "@voltagent/core";
-import { safeBrowserOperation } from "./browserBaseTools";
-import type { ToolExecutionContext } from "@voltagent/core";
-import { resetBrowserState as resetBrowserStateInternal } from "./playwrightToolHandler";
+import { safeBrowserOperation } from "./browserBaseTools.js";
+import { resetBrowserState as resetBrowserStateInternal } from "./playwrightToolHandler.js";
+import type { Page } from "playwright";
 
 /**
  * Tool for navigating to URLs
@@ -44,7 +44,7 @@ export const navigationTool = createTool({
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
 
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       const response = await page.goto(args.url, {
         timeout: args.timeout,
         waitUntil: args.waitUntil,
@@ -69,7 +69,7 @@ export const goBackTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       await page.goBack();
       return { result: "Navigated back in browser history" };
     });
@@ -88,7 +88,7 @@ export const goForwardTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       await page.goForward();
       return { result: "Navigated forward in browser history" };
     });
@@ -107,7 +107,7 @@ export const refreshPageTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       await page.reload();
       return { result: "Page refreshed successfully" };
     });

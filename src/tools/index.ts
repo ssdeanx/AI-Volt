@@ -3,15 +3,38 @@
  * Centralized management of all available tools and toolkits
  */
 
-// Individual Tool Exports
+// #region Individual Tool Exports
+
+// ## Simple Tools
 export { calculatorTool, statisticsAnalysisTool } from "./calculator.js";
 export { dateTimeTool } from "./datetime.js";
 export { systemInfoTool, codeExecutionEnvironmentAnalysisTool } from "./systemInfo.js";
 export { ingestDocumentTool, queryKnowledgeBaseTool, summarizeDocumentTool, listKnowledgeBaseDocumentsTool } from "./knowledgeBaseTools.js";
-export { getNodeProcessInfoTool, guideNodeProfilerTool, runIsolatedCodeTool, runJsInspectTool, runEslintTool, identifySecurityAntiPatternsTool, analyzeCodeComplexityTool, analyzeLogPatternsTool, getAgentExecutionTimelineTool } from "./debugTools.js";
 export { readDataFromFileTool, analyzeCsvDataTool, writeDataToFileTool, checksumFileTool, compressFileTool, decompressFileTool, findInFileTool } from "./dataTools.js";
-export { deployServiceTool, manageResourcesTool, monitorCloudTool, buildImageTool, pullImageTool, listImagesTool, removeImageTool, execContainerCommandTool, inspectContainerTool, createNetworkTool, listNetworksTool, removeNetworkTool, createVolumeTool, listVolumesTool, removeVolumeTool } from "./cloudTools.js";
+export * from "./promptManagementTools.js";
 
+// ## Debugging Tools
+export {
+  runIsolatedCodeTool,
+  lintCodeTool,
+  identifySecurityAntiPatternsTool,
+  analyzeCodeComplexityTool,
+  findCodeDuplicatesTool,
+} from "./debugTools.js";
+
+// ## Cloud Tools
+export {
+  deployServiceTool,
+  listContainersTool,
+  stopContainerTool,
+  removeContainerTool,
+  getContainerLogsTool,
+  inspectContainerTool,
+  listImagesTool,
+  buildImageTool,
+} from "./cloudTools.js";
+
+// ## Web Browser Tools
 export { 
   webSearchTool, 
   extractTextTool, 
@@ -20,41 +43,59 @@ export {
   extractTablesTool,
   extractJsonLdTool,
 } from "./webBrowser.js";
+
+// ## Standard Git Tools
 export { 
   gitStatusTool,
-  gitAddTool,
-  gitCommitTool,
-  gitPushTool,
-  gitPullTool,
-  gitBranchTool,
+  gitAddTool as standardGitAddTool, // aliased to avoid conflict
+  gitCommitTool as standardGitCommitTool, // aliased to avoid conflict
+  gitPushTool as standardGitPushTool, // aliased to avoid conflict
+  gitPullTool as standardGitPullTool, // aliased to avoid conflict
+  gitBranchTool as standardGitBranchTool, // aliased to avoid conflict
   gitLogTool,
   gitDiffTool,
-  gitMergeTool,
+  gitMergeTool as standardGitMergeTool, // aliased to avoid conflict
   gitResetTool,
   gitTool,
 } from "./gitTool.js";
-// Enhanced Git toolkit exports
+
+// ## Enhanced Git Tools
 export {
   enhancedGitStatusTool,
   secureGitScriptTool,
   gitRepositoryAnalysisTool,
-  gitHookValidatorTool,
-  enhancedGitToolkit
+  gitAddTool,
+  gitCommitTool,
+  gitPushTool,
+  gitFetchTool,
+  gitPullTool,
+  gitMergeTool,
+  gitBranchTool,
+  gitCloneTool,
 } from "./enhancedGitTool.js";
-// Coding tools exports
+
+// ## Coding Tools
 export {
-  secureCodeExecutorTool,
-  fileSystemOperationsTool,
-  codeAnalysisTool,
-  projectStructureGeneratorTool
+  sandboxedCodeExecutorTool,
+  readFileTool,
+  writeFileTool,
+  deleteFileTool,
+  listDirectoryTool,
+  createDirectoryTool,
+  statTool,
+  moveTool,
+  copyTool,
+  replaceLineInFileTool,
 } from "./codingTools.js";
-// Enhanced web browser tools exports
+
+// ## Enhanced Web Browser Tools
 export {
   secureWebProcessorTool,
   webScrapingManagerTool,
   webContentValidatorTool,
-  enhancedWebBrowserToolkit,
 } from "./enhancedWebBrowser.js";
+
+// ## Playwright Tools
 export {
   navigationTool,
   screenshotTool,
@@ -63,7 +104,8 @@ export {
   outputTools,
   visiblePageTools,
 } from "./playwright/index.js";
-// GitHub tools exports
+
+// ## GitHub Tools
 export {
   fetchRepoStarsTool,
   fetchRepoContributorsTool,
@@ -82,6 +124,19 @@ export {
   getUserProfileTool,
   listOrgMembersTool,
 } from "./githubTool.js";
+
+// #endregion
+
+// #region Toolkit Exports
+export { enhancedGitToolkit } from "./enhancedGitTool.js";
+export { enhancedWebBrowserToolkit } from "./enhancedWebBrowser.js";
+export { codingToolkit } from './codingTools.js';
+export { debugToolkit } from './debugTools.js';
+export { cloudToolkit } from './cloudTools.js';
+export { default as promptManagerToolkit } from "./promptManagerToolkit.js";
+// #endregion
+
+// #region Tool and Toolkit Aggregation
 
 // Import all tools for array registration
 import { calculatorTool, statisticsAnalysisTool } from "./calculator.js";
@@ -96,7 +151,6 @@ import {
   outputTools,
   visiblePageTools,
 } from "./playwright/index.js";
-
 import { 
   webSearchTool, 
   extractTextTool, 
@@ -104,18 +158,17 @@ import {
   extractMetadataTool, 
   extractTablesTool,
   extractJsonLdTool,
-
 } from "./webBrowser.js";
 import { 
   gitStatusTool,
-  gitAddTool,
-  gitCommitTool,
-  gitPushTool,
-  gitPullTool,
-  gitBranchTool,
+  gitAddTool as standardGitAddTool,
+  gitCommitTool as standardGitCommitTool,
+  gitPushTool as standardGitPushTool,
+  gitPullTool as standardGitPullTool,
+  gitBranchTool as standardGitBranchTool,
   gitLogTool,
   gitDiffTool,
-  gitMergeTool,
+  gitMergeTool as standardGitMergeTool,
   gitResetTool,
   gitTool,
 } from "./gitTool.js";
@@ -123,22 +176,32 @@ import {
   enhancedGitStatusTool,
   secureGitScriptTool,
   gitRepositoryAnalysisTool,
-  gitHookValidatorTool,
-  enhancedGitToolkit
+  gitAddTool,
+  gitCommitTool,
+  gitPushTool,
+  gitFetchTool,
+  gitPullTool,
+  gitMergeTool,
+  gitBranchTool,
+  gitCloneTool,
 } from "./enhancedGitTool.js";
 import {
-  secureCodeExecutorTool,
-  fileSystemOperationsTool,
-  codeAnalysisTool,
-  projectStructureGeneratorTool,
+  sandboxedCodeExecutorTool,
+  readFileTool,
+  writeFileTool,
+  deleteFileTool,
+  listDirectoryTool,
+  createDirectoryTool,
+  statTool,
+  moveTool,
+  copyTool,
+  replaceLineInFileTool,
 } from "./codingTools.js";
 import {
   secureWebProcessorTool,
   webScrapingManagerTool,
   webContentValidatorTool,
-  enhancedWebBrowserToolkit,
 } from "./enhancedWebBrowser.js";
-import { promptManagementToolkit } from "./promptManagementTools.js";
 import {
   fetchRepoStarsTool,
   fetchRepoContributorsTool,
@@ -158,70 +221,115 @@ import {
   listOrgMembersTool,
 } from "./githubTool.js";
 import {
-  getNodeProcessInfoTool,
-  guideNodeProfilerTool,
   runIsolatedCodeTool,
-  runJsInspectTool,
-  runEslintTool,
+  lintCodeTool,
   identifySecurityAntiPatternsTool,
   analyzeCodeComplexityTool,
-  analyzeLogPatternsTool,
-  getAgentExecutionTimelineTool
+  findCodeDuplicatesTool,
 } from "./debugTools.js";
 import { readDataFromFileTool, analyzeCsvDataTool, writeDataToFileTool, checksumFileTool, compressFileTool, decompressFileTool, findInFileTool } from "./dataTools.js";
-import { deployServiceTool, manageResourcesTool, monitorCloudTool, buildImageTool, pullImageTool, listImagesTool, removeImageTool, execContainerCommandTool, inspectContainerTool, createNetworkTool, listNetworksTool, removeNetworkTool, createVolumeTool, listVolumesTool, removeVolumeTool } from "./cloudTools.js";
+import { 
+  deployServiceTool, 
+  listContainersTool, 
+  stopContainerTool, 
+  removeContainerTool, 
+  getContainerLogsTool, 
+  inspectContainerTool, 
+  listImagesTool, 
+  buildImageTool,
+} from "./cloudTools.js";
+import * as PromptManagementTools from "./promptManagementTools.js";
+import { enhancedGitToolkit } from "./enhancedGitTool.js";
+import { enhancedWebBrowserToolkit } from "./enhancedWebBrowser.js";
+import { codingToolkit } from './codingTools.js';
+import { debugToolkit } from './debugTools.js';
+import { cloudToolkit } from './cloudTools.js';
+import promptManagerToolkit from "./promptManagerToolkit.js";
 
 /**
  * Array of all available individual tools for the AI-Volt agent
  */
 export const allTools = [
+  // Simple Tools
   calculatorTool,
   statisticsAnalysisTool,
   dateTimeTool,
   systemInfoTool,
   codeExecutionEnvironmentAnalysisTool,
+  
+  // Knowledge Base
   ingestDocumentTool,
   queryKnowledgeBaseTool,
   summarizeDocumentTool,
   listKnowledgeBaseDocumentsTool,
+  
+  // Data Tools
+  readDataFromFileTool,
+  analyzeCsvDataTool,
+  writeDataToFileTool,
+  checksumFileTool,
+  compressFileTool,
+  decompressFileTool,
+  findInFileTool,
+  
+  // Web Browser
   webSearchTool,
   extractTextTool,
   extractLinksTool,
   extractMetadataTool,
   extractTablesTool,
   extractJsonLdTool,
-  gitStatusTool,
-  gitAddTool,
-  gitCommitTool,
-  gitPushTool,
-  gitPullTool,
-  gitBranchTool,
-  gitLogTool,
-  gitDiffTool,
-  gitMergeTool,
-  gitResetTool,  gitTool,
-  // Enhanced Git tools
-  enhancedGitStatusTool,
-  secureGitScriptTool,
-  gitRepositoryAnalysisTool,
-  gitHookValidatorTool,  // Coding tools
-  secureCodeExecutorTool,
-  fileSystemOperationsTool,
-  codeAnalysisTool,
-  projectStructureGeneratorTool,
-  // Enhanced web browser tools
   secureWebProcessorTool,
   webScrapingManagerTool,
   webContentValidatorTool,
-  // Playwright tools
+  
+  // Standard Git
+  gitStatusTool,
+  standardGitAddTool,
+  standardGitCommitTool,
+  standardGitPushTool,
+  standardGitPullTool,
+  standardGitBranchTool,
+  gitLogTool,
+  gitDiffTool,
+  standardGitMergeTool,
+  gitResetTool,
+  gitTool,
+  
+  // Enhanced Git
+  enhancedGitStatusTool,
+  secureGitScriptTool,
+  gitRepositoryAnalysisTool,
+  gitAddTool,
+  gitCommitTool,
+  gitPushTool,
+  gitFetchTool,
+  gitPullTool,
+  gitMergeTool,
+  gitBranchTool,
+  gitCloneTool,
+  
+  // Coding
+  sandboxedCodeExecutorTool,
+  readFileTool,
+  writeFileTool,
+  deleteFileTool,
+  listDirectoryTool,
+  createDirectoryTool,
+  statTool,
+  moveTool,
+  copyTool,
+  replaceLineInFileTool,
+  
+  // Playwright
   navigationTool,
   screenshotTool,
-  // Spread individual tools from their respective groups
   ...Object.values(interactionTools),
   ...Object.values(responseTools),
   ...Object.values(outputTools),
   ...Object.values(visiblePageTools),
-  // GitHub tools
+  
+  // GitHub
   fetchRepoStarsTool,
   fetchRepoContributorsTool,
   getFileContentTool,
@@ -238,40 +346,27 @@ export const allTools = [
   createRepositoryHookTool,
   getUserProfileTool,
   listOrgMembersTool,
-  // Debugging tools
-  getNodeProcessInfoTool,
-  guideNodeProfilerTool,
+  
+  // Debugging
   runIsolatedCodeTool,
-  runJsInspectTool,
-  runEslintTool,
+  lintCodeTool,
   identifySecurityAntiPatternsTool,
   analyzeCodeComplexityTool,
-  analyzeLogPatternsTool,
-  getAgentExecutionTimelineTool,
-  promptManagementToolkit,
-  readDataFromFileTool,
-  analyzeCsvDataTool,
-  writeDataToFileTool,
-  checksumFileTool,
-  compressFileTool,
-  decompressFileTool,
-  findInFileTool,
+  findCodeDuplicatesTool,
+  
+  // Cloud
   deployServiceTool,
-  manageResourcesTool,
-  monitorCloudTool,
-  buildImageTool,
-  pullImageTool,
-  listImagesTool,
-  removeImageTool,
-  execContainerCommandTool,
+  listContainersTool,
+  stopContainerTool,
+  removeContainerTool,
+  getContainerLogsTool,
   inspectContainerTool,
-  createNetworkTool,
-  listNetworksTool,
-  removeNetworkTool,
-  createVolumeTool,
-  listVolumesTool,
-  removeVolumeTool,
-] as const;
+  listImagesTool,
+  buildImageTool,
+
+  // Prompt Management
+  ...Object.values(PromptManagementTools)
+];
 
 /**
  * Array of all available toolkits for the AI-Volt agent
@@ -279,8 +374,14 @@ export const allTools = [
 export const allToolkits = [
   enhancedGitToolkit,
   enhancedWebBrowserToolkit,
-  promptManagementToolkit,
-] as const;
+  codingToolkit,
+  debugToolkit,
+  cloudToolkit,
+  promptManagerToolkit
+];
+
+// Default export for convenience
+export default allTools;
 
 /**
  * Tool categories for organizational purposes
@@ -290,8 +391,8 @@ export const toolCategories = {
   utility: [dateTimeTool, systemInfoTool],
   system: [systemInfoTool],
   web: [webSearchTool, extractTextTool, extractLinksTool, extractMetadataTool, extractTablesTool, extractJsonLdTool, secureWebProcessorTool, webScrapingManagerTool, webContentValidatorTool],
-  git: [gitStatusTool, gitAddTool, gitCommitTool, gitPushTool, gitPullTool, gitBranchTool, gitLogTool, gitDiffTool, gitMergeTool, gitResetTool, gitTool, enhancedGitStatusTool, secureGitScriptTool, gitRepositoryAnalysisTool, gitHookValidatorTool],
-  coding: [secureCodeExecutorTool, fileSystemOperationsTool, codeAnalysisTool, projectStructureGeneratorTool],
+  git: [gitStatusTool, standardGitAddTool, standardGitCommitTool, standardGitPushTool, standardGitPullTool, standardGitBranchTool, gitLogTool, gitDiffTool, standardGitMergeTool, gitResetTool, gitTool, enhancedGitStatusTool, secureGitScriptTool, gitRepositoryAnalysisTool, gitAddTool, gitCommitTool, gitPushTool, gitPullTool, gitBranchTool, gitMergeTool, gitResetTool, gitCloneTool],
+  coding: [sandboxedCodeExecutorTool, readFileTool, writeFileTool, deleteFileTool, listDirectoryTool, createDirectoryTool, statTool, moveTool, copyTool, replaceLineInFileTool],
 } as const;
 
 

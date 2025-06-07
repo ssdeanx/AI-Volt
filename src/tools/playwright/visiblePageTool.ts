@@ -5,8 +5,9 @@
 
 import { z } from "zod";
 import { createTool, type ToolExecuteOptions } from "@voltagent/core";
-import { safeBrowserOperation } from "./browserBaseTools";
+import { safeBrowserOperation } from "./browserBaseTools.js";
 import type { ToolExecutionContext } from "@voltagent/core";
+import type { Page } from "playwright";
 
 /**
  * Tool for getting all visible text on a page
@@ -20,7 +21,7 @@ export const getVisibleTextTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       const visibleText = await page.evaluate(() => document.body.innerText);
       return {
         result: "Extracted visible text from the page.",
@@ -42,7 +43,7 @@ export const getVisibleHtmlTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       const pageHtml = await page.content();
       return {
         result: "Retrieved HTML structure.",
@@ -64,19 +65,23 @@ export const listInteractiveElementsTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       const interactiveElements = await page.evaluate(() => {
+        const getElementData = (el: Element) => {
+            const attributes = Object.fromEntries(
+                Array.from(el.attributes).map(attr => [attr.name, attr.value])
+            );
+            return {
+                tag: el.tagName.toLowerCase(),
+                text: el.textContent?.trim().slice(0, 100),
+                attributes,
+            };
+        };
+
         const selectors =
           "a[href], button, input, select, textarea, [role='button'], [role='link']";
         const elements = Array.from(document.querySelectorAll(selectors));
-        // Simplify elements for the response
-        return elements.map((el) => ({
-          tag: el.tagName.toLowerCase(),
-          text: el.textContent?.trim().slice(0, 100),
-          attributes: Object.fromEntries(
-            Array.from(el.attributes).map((attr) => [attr.name, attr.value]),
-          ),
-        }));
+        return elements.map(getElementData);
       });
       return {
         result: `Found ${interactiveElements.length} interactive elements.`,
@@ -98,7 +103,7 @@ export const getUserAgentTool = createTool({
     if (!context?.operationContext?.userContext) {
       throw new Error("ToolExecutionContext is missing or invalid.");
     }
-    return safeBrowserOperation(context, async (page) => {
+    return safeBrowserOperation(context, async (page: Page) => {
       const userAgent = await page.evaluate(() => navigator.userAgent);
       return {
         result: `Current user agent: ${userAgent}`,
