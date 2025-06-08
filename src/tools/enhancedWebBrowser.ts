@@ -314,7 +314,8 @@ const webScrapingManagerTool = createTool({
         ));
       } else {
         for (let i = 0; i < validatedUrls.length; i++) {
-          const urlFromValidatedArray = validatedUrls[i]; // This should be a string from validateUrl()
+          // Safely access the validated URL array with bounds checking
+          const urlFromValidatedArray = i < validatedUrls.length ? String(validatedUrls[i]) : '';
 
           let currentUrlToProcess: string;
           try {
@@ -480,10 +481,10 @@ const webContentValidatorTool = createTool({
           const tagName = el.tagName;
           if (typeof tagName === 'string' && tagName.length > 1) {
             const level = parseInt(tagName.substring(1), 10);
-            return isNaN(level) ? null : level;
+            return isNaN(level) ? undefined : level;
           }
-          return null;
-        }).get().filter((level): level is number => level !== null);
+          return undefined;
+        }).get().filter((level): level is number => typeof level === 'number') as number[];
         
         for (let i = 1; i < headings.length; i++) {
           const currentHeading = headings.at(i);

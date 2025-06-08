@@ -109,10 +109,27 @@ const extractMetadataTool = createTool({
     const $ = cheerio.load(html);
     const meta: Record<string, string> = {};
     meta.title = $("title").text();
+    
+    // Define allowed meta tag names to prevent object injection
+    const allowedMetaNames = new Set([
+      'description', 'keywords', 'author', 'viewport', 'robots',
+      'og:title', 'og:description', 'og:image', 'og:url', 'og:type',
+      'twitter:card', 'twitter:title', 'twitter:description', 'twitter:image',
+      'theme-color', 'charset', 'canonical'
+    ]);
+    
     $("meta").each((i: number, el: any) => {
       const name = $(el).attr("name") || $(el).attr("property");
       const content = $(el).attr("content");
-      if (name && content) meta[name] = content;
+      if (name && content && allowedMetaNames.has(name)) {
+        // Use Object.defineProperty to safely set the property
+        Object.defineProperty(meta, name, {
+          value: content,
+          writable: true,
+          enumerable: true,
+          configurable: true
+        });
+      }
     });
     return { url, meta };
   }

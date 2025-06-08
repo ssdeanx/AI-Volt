@@ -72,8 +72,38 @@ export const deployServiceTool = createTool({
     // First, pull the image to ensure it exists
     await dockerApiRequest('POST', `/images/create?fromImage=${imageName}`);
     
-    const ExposedPorts = ports ? Object.keys(ports).reduce((acc: Record<string, any>, key) => ({ ...acc, [key]: {} }), Object.create(null)) : Object.create(null);
-    const PortBindings = ports ? Object.keys(ports).reduce((acc: Record<string, any>, key) => ({ ...acc, [key]: [{ HostPort: String(ports[key]) }] }), Object.create(null)) : Object.create(null);
+    const ExposedPorts = ports ? Object.keys(ports).reduce((acc: Record<string, any>, key) => {
+      // Validate key is safe and not a prototype pollution vector
+      if (typeof key === 'string' && key.length > 0 && 
+          !key.includes('__proto__') && !key.includes('constructor') && !key.includes('prototype') &&
+          /^[a-zA-Z0-9_\-\\/]+$/.test(key)) {
+        Object.defineProperty(acc, key, {
+          value: {},
+          writable: true,
+          enumerable: true,
+          configurable: true
+        });
+      }
+      return acc;
+    }, Object.create(null)) : {};
+    const PortBindings = ports ? (() => {
+      const bindings = Object.create(null);
+      for (const [key, value] of Object.entries(ports)) {
+        // Validate key is safe and not a prototype pollution vector
+        if (typeof key === 'string' && key.length > 0 && 
+            !key.includes('__proto__') && !key.includes('constructor') && !key.includes('prototype') &&
+            /^[a-zA-Z0-9_\-\\/]+$/.test(key) && 
+            typeof value === 'number' && value > 0 && value <= 65535) {
+          Object.defineProperty(bindings, key, {
+            value: [{ HostPort: String(value) }],
+            writable: true,
+            enumerable: true,
+            configurable: true
+          });
+        }
+      }
+      return bindings;
+    })() : {};
 
     const containerConfig = {
       Image: imageName,

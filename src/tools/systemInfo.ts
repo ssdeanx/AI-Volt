@@ -142,60 +142,109 @@ const getEnvironmentInfo = () => {
 /**
  * Get disk usage information
  */
-const getDiskInfo = async () => {
+const getDiskInfo = async (): Promise<Array<{
+  filesystem: string;
+  size: string;
+  used: string;
+  available: string;
+  capacity: string;
+  mounted_on: string;
+}>> => {
   return new Promise((resolve, reject) => {
     const isWindows = os.platform() === 'win32';
-    const command = isWindows ? 'wmic logicaldisk get size,freespace,caption' : 'df -h';
-    child_process.exec(command, (error, stdout, stderr) => { // eslint-disable-line security/detect-child-process
-      if (error) {
-        logger.error(`Disk info error: ${error.message}`);
-        reject(new Error(`Failed to get disk info: ${stderr || error.message}`));
+    
+    // Define safe, predefined commands - no user input
+    const safeCommands = {
+      windows: ['wmic', ['logicaldisk', 'get', 'size,freespace,caption']],
+      // POSIX df command: -P for POSIX standard output, -k for sizes in 1K blocks
+      // This provides a more consistent output format for parsing.
+      unix: ['df', ['-Pk']] 
+    } as const;
+    
+    const [command, args] = isWindows ? safeCommands.windows : safeCommands.unix;
+    
+    // Use spawn instead of exec for better security
+    const childProcess = child_process.spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'], // stdin, stdout, stderr
+      shell: false, // Explicitly disable shell to prevent injection
+      timeout: 10000, // 10 second timeout
+    });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    childProcess.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    childProcess.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    childProcess.on('error', (error) => {
+      logger.error(`Disk info process error: ${error.message}`, { command, args });
+      reject(new Error(`Failed to get disk info: ${error.message}`));
+    });
+    
+    childProcess.on('close', (code) => {
+      if (code !== 0) {
+        logger.error(`Disk info command failed with code ${code}: ${stderr}`, { command, args, stdout });
+        reject(new Error(`Failed to get disk info: Command exited with code ${code}. Stderr: ${stderr.slice(0, 200)}`));
         return;
       }
       
       try {
         if (isWindows) {
           // Parse Windows wmic output
-          const lines = stdout.trim().split('\n').slice(1).filter(line => line.trim());
+          const lines = stdout.trim().split(/\r?\n/).slice(1).filter(line => line.trim());
           const disks = lines.map(line => {
             const parts = line.trim().split(/\s+/);
             if (parts.length >= 3) {
               const caption = parts[0];
-              const freeSpace = parseInt(parts[1]) || 0;
-              const size = parseInt(parts[2]) || 0;
-              const used = size - freeSpace;
-              const usagePercent = size > 0 ? ((used / size) * 100).toFixed(1) + '%' : '0%';
+              const freeSpaceBytes = parseInt(parts[1]) || 0;
+              const sizeBytes = parseInt(parts[2]) || 0;
+              const usedBytes = sizeBytes - freeSpaceBytes;
+              const usagePercent = sizeBytes > 0 ? ((usedBytes / sizeBytes) * 100).toFixed(1) + '%' : '0%';
               
               return {
                 filesystem: caption,
-                size: formatBytesToString(size),
-                used: formatBytesToString(used),
-                available: formatBytesToString(freeSpace),
+                size: formatBytesToString(sizeBytes),
+                used: formatBytesToString(usedBytes),
+                available: formatBytesToString(freeSpaceBytes),
                 capacity: usagePercent,
-                mounted_on: caption,
+                mounted_on: caption, // For Windows, caption is usually the drive letter (e.g., C:)
               };
             }
             return null;
-          }).filter(Boolean);
+          }).filter(Boolean) as Array<{ filesystem: string; size: string; used: string; available: string; capacity: string; mounted_on: string; }>;
           resolve(disks);
         } else {
-          // Parse Unix df output
-          const lines = stdout.trim().split('\n').slice(1);
+          // Parse Unix df -Pk output (POSIX standard, sizes in 1K blocks)
+          // Filesystem 1024-blocks Used Available Capacity Mounted on
+          // /dev/sda1    10307920 4021800 5757708      42% /
+          const lines = stdout.trim().split('\n').slice(1); // Skip header
           const disks = lines.map(line => {
-            const parts = line.split(/\s+/);
-            return {
-              filesystem: parts[0],
-              size: parts[1],
-              used: parts[2],
-              available: parts[3],
-              capacity: parts[4],
-              mounted_on: parts[5],
-            };
-          });
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 6) {
+              const sizeKB = parseInt(parts[1]) || 0;
+              const usedKB = parseInt(parts[2]) || 0;
+              const availableKB = parseInt(parts[3]) || 0;
+              
+              return {
+                filesystem: parts[0],
+                size: formatBytesToString(sizeKB * 1024),
+                used: formatBytesToString(usedKB * 1024),
+                available: formatBytesToString(availableKB * 1024),
+                capacity: parts[4], // Already a percentage string
+                mounted_on: parts[5],
+              };
+            }
+            return null;
+          }).filter(Boolean) as Array<{ filesystem: string; size: string; used: string; available: string; capacity: string; mounted_on: string; }>;
           resolve(disks);
         }
       } catch (parseError) {
-        logger.error(`Failed to parse disk info output: ${parseError}`);
+        logger.error(`Failed to parse disk info output: ${parseError}`, { stdout });
         reject(new Error(`Failed to parse disk info: ${parseError instanceof Error ? parseError.message : String(parseError)}`));
       }
     });
@@ -312,8 +361,11 @@ export const systemInfoTool = createTool({
           result = getOsDetails();
           break;
 
-        default:
-          throw new Error(`Unknown category: ${category}`);
+        default: {
+          // This should be caught by Zod, but as a safeguard:
+          const exhaustiveCheck: never = category;
+          throw new Error(`Unknown category: ${exhaustiveCheck}`);
+        }
       }
 
       logger.info("System information retrieved", { category });
@@ -364,7 +416,7 @@ const getFilteredEnvironmentVariables = () => {
   for (const key of relevantEnvVars) {
     const value = process.env[key];
     if (value !== undefined) {
-      envVars[key] = String(value);
+      envVars[key] = String(value); // Ensure value is string
     }
   }
   return envVars;
@@ -408,8 +460,11 @@ export const codeExecutionEnvironmentAnalysisTool = createTool({
         case "resource_limits":
           result = getResourceLimits();
           break;
-        default:
-          throw new Error(`Unknown category: ${category}`);
+        default: {
+          // This should be caught by Zod, but as a safeguard:
+          const exhaustiveCheck: never = category;
+          throw new Error(`Unknown category: ${exhaustiveCheck}`);
+        }
       }
 
       logger.info("[codeExecutionEnvironmentAnalysisTool] Environment analysis completed", { category, result });
@@ -417,8 +472,9 @@ export const codeExecutionEnvironmentAnalysisTool = createTool({
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown environment analysis error";
-      logger.error("[codeExecutionEnvironmentAnalysisTool] Environment analysis failed", error);
-      throw new Error(`Environment analysis failed: ${errorMessage}`);
+      logger.error("[codeExecutionEnvironmentAnalysisTool] Environment analysis failed", { category, error: errorMessage, stack: error instanceof Error ? error.stack : undefined });
+      // Re-throw the original error or a new error with more context
+      throw new Error(`Environment analysis failed for category '${category}': ${errorMessage}`);
     }
   },
 });

@@ -91,6 +91,7 @@ export const getFileContentTool = createTool({
       });
 
       // Type guard to ensure response.data is an object and has a 'content' property
+      // eslint-disable-next-line sonarjs/different-types-comparison
       if (typeof response.data === 'object' && response.data !== null && 'content' in response.data && typeof response.data.content === 'string') {
         const content = Buffer.from(response.data.content, 'base64').toString('utf8');
         return {

@@ -122,6 +122,7 @@ export const calculatorTool = createTool({
 
         case "factorial":
           if (a === undefined || !Number.isInteger(a)) throw new Error("Factorial requires an integer input 'a'");
+          if (a < 0) throw new Error("Factorial is not defined for negative numbers"); // Added specific check here
           result = factorial(a);
           break;
 
@@ -136,8 +137,11 @@ export const calculatorTool = createTool({
           result = isPrimeNumber(a);
           break;
 
-        default:
-          throw new Error(`Unknown operation: ${operation}`);
+        default: {
+          // The type system should prevent this, but as a safeguard:
+          const exhaustiveCheck: never = operation;
+          throw new Error(`Unknown operation: ${exhaustiveCheck}`);
+        }
       }
 
       logger.info("Calculator operation/algorithm completed", { operation, a, b, limit, result });
@@ -204,14 +208,19 @@ const calculateMedian = (numbers: number[]): number => {
         return (leftValue + rightValue) / 2;
       }
     }
-    return 0; // Fallback for edge case
+    // This fallback should ideally not be reached if input array is not empty
+    // and indices are valid. Consider throwing an error for unexpected scenarios.
+    logger.warn("[calculateMedian] Fallback triggered for even length array, potentially due to unexpected sorted array state.", { sortedNumbers });
+    return 0; 
   } else {
     // Odd number of elements - safely access middle element
     if (mid >= 0 && mid < sortedNumbers.length) {
       const midValue = sortedNumbers.at(mid);
       return midValue !== undefined ? midValue : 0;
     }
-    return 0; // Fallback for edge case
+    // This fallback should ideally not be reached.
+    logger.warn("[calculateMedian] Fallback triggered for odd length array, potentially due to unexpected sorted array state.", { sortedNumbers });
+    return 0;
   }
 };
 

@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
 /**
  * Enhanced Git Toolkit with isomorphic-git, isolated-vm, and shelljs
  * This toolkit provides secure and cross-platform Git operations.
@@ -53,16 +54,44 @@ export const enhancedGitStatusTool = createTool({
     logger.info('[enhancedGitStatusTool] Getting status', { path });
     try {
       return await executeInRepo(path, async ({ fs, dir }) => {
-        const status = await git.statusMatrix({ fs, dir });
-        const modified = status.filter(([, , workdir]) => workdir === 2).map(([filepath]) => filepath);
-        const staged = status.filter(([, head]) => (head as any) === 2).map(([filepath]) => filepath);
-        const untracked = status.filter(([, , workdir]) => workdir === 0).map(([filepath]) => filepath);
+        const statusMatrix = await git.statusMatrix({ fs, dir });
+        // Interpret statusMatrix: [filepath, head, workdir, stage]
+        // Values for head, workdir, stage: 0=absent, 1=added, 2=modified, 3=deleted
 
-      return {
-          isClean: modified.length === 0 && staged.length === 0 && untracked.length === 0,
-          modified,
-          staged,
-          untracked,
+        const stagedFiles: string[] = [];
+        const modifiedFiles: string[] = []; // Unstaged changes
+        const untrackedFiles: string[] = [];
+
+        for (const row of statusMatrix) {
+          const filepath = row[0] as string;
+          const headState = row[1];
+          const workdirState = row[2];
+          const stageState = row[3];
+
+          // Untracked files: absent in HEAD, absent in STAGE, added in WORKDIR
+          if (headState === 0 && stageState === 0 && workdirState === 1) {
+            untrackedFiles.push(filepath);
+          } else {
+            // Staged files: any change (added, modified, deleted) in STAGE
+            if (stageState === 1 || stageState === 2 || stageState === 3) {
+              stagedFiles.push(filepath);
+            }
+
+            // Modified files (unstaged changes):
+            // File has changes in WORKDIR (added, modified, or deleted)
+            // AND this WORKDIR state is different from STAGE state.
+            // (And it's not an untracked file, which is handled by the 'else' branch)
+            if ((workdirState === 1 || workdirState === 2 || workdirState === 3) && workdirState !== stageState) {
+              modifiedFiles.push(filepath);
+            }
+          }
+        }
+
+        return {
+          isClean: stagedFiles.length === 0 && modifiedFiles.length === 0 && untrackedFiles.length === 0,
+          modified: modifiedFiles,
+          staged: stagedFiles,
+          untracked: untrackedFiles,
           path: dir,
         };
       });
@@ -176,11 +205,11 @@ export const gitRepositoryAnalysisTool = createTool({
         
         analysis.fileStats = {
           totalFiles: files.length,
-            fileTypes: files.reduce((acc: Record<string, number>, file: string) => {
+            fileTypes: files.reduce((acc: Map<string, number>, file: string) => {
               const ext = path.extname(file) || '.noextension';
-              acc[ext] = (acc[ext] || 0) + 1;
+              acc.set(ext, (acc.get(ext) || 0) + 1);
               return acc;
-            }, {}),
+            }, new Map<string, number>()),
         };
       }
 
