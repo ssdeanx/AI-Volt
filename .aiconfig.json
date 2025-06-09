@@ -1,0 +1,70 @@
+{
+  "name": "AI-Volt Development Workflows",
+  "description": "Recipes for testing, improving, and creating agent capabilities.",
+  "schema_version": "v1",
+  "prompts": [
+    {
+      "name": "VALIDATE_DELEGATE_TASK_TOOL",
+      "description": "A test-driven workflow to ensure the core 'delegate_tasks' tool is fully functional.",
+      "metadata": { "model": "augment-agent" },
+      "input": "We need to ensure the 'delegate_tasks' tool is robust. Let's create a test suite for it.",
+      "chain": [
+        {
+          "prompt": "STEP 1: Analyze the `delegate_tasks` tool in `src/tools/compositeTools.ts` and the `supervisorAgent.ts` to understand its expected inputs (`tasks` array with `worker`, `tool`, `input`)."
+        },
+        {
+          "prompt": "STEP 2: Create a new test file at `tests/tools/delegateTasks.test.ts`. Use the `vitest` framework, as it's in the dev dependencies. Setup basic mocks for the worker agents."
+        },
+        {
+          "prompt": "STEP 3: Write three test cases in the new file: \n1. A 'happy path' test that delegates a valid task to the 'CodeGeneratorAgent'. \n2. An error case where the 'worker' name specified in the task does not exist. \n3. An error case where the 'input' provided to the task does not match the Zod schema of the target tool."
+        },
+        {
+          "prompt": "STEP 4: Execute the new test file using the appropriate `pnpm` command and report the results. If any tests fail, provide the exact error message and line number."
+        },
+        {
+          "prompt": "STEP 5 (Conditional): If tests failed due to bugs in the `delegate_tasks` tool, modify `src/tools/compositeTools.ts` to correctly handle the error cases and make the tests pass. Do not modify the tests themselves."
+        }
+      ]
+    },
+    {
+      "name": "IMPROVE_SUPERVISOR_RETRIEVER",
+      "description": "Guides the refactoring and enhancement of the main supervisor's retriever.",
+      "metadata": { "model": "augment-agent" },
+      "input": "Let's improve the existing `supervisorRetriever.ts` using modern RAG techniques.",
+      "chain": [
+        {
+          "prompt": "STEP 1: Analyze the current implementation in `src/agents/supervisorRetriever.ts`. What is its current retrieval strategy (e.g., similarity search)? What are its potential limitations (e.g., no query transformation, no re-ranking)?"
+        },
+        {
+          "prompt": "STEP 2: Propose two specific improvements. Suggestion 1: Implement query transformation, where the initial user query is re-written by an LLM to be more optimal for vector search. Suggestion 2: Add a re-ranking step, where the initial search results are re-ordered by a more powerful model for relevance."
+        },
+        {
+          "prompt": "STEP 3: Let's proceed with Suggestion 1 (Query Transformation). Modify `supervisorRetriever.ts`. Before performing the similarity search, add a new step that calls the LLM with a prompt like 'Re-write this query to be optimal for a vector database search:' and use the transformed query for the search."
+        }
+      ]
+    },
+    {
+      "name": "CREATE_WORKER_RETRIEVER_ARCHITECTURE",
+      "description": "Scaffolds a new, dedicated retriever architecture for all worker agents.",
+      "metadata": { "model": "augment-agent" },
+      "input": "We need to give our worker agents dedicated knowledge. Let's create a retriever for them.",
+      "chain": [
+        {
+          "prompt": "STEP 1: Propose a plan to create a dedicated retriever architecture for worker agents. The plan should include a new base class for the retriever and outline how to instantiate it for each worker. List all new files to create and existing files to modify."
+        },
+        {
+          "prompt": "STEP 2: Create a new base class file at `src/agents/retrievers/WorkerRetriever.ts`. This class should handle loading documents from a specific source (e.g., a markdown file) and provide a `search` method."
+        },
+        {
+          "prompt": "STEP 3: Modify the `createWorkerAgents` function in `src/agents/supervisorAgent.ts`. Each worker agent's constructor should now accept a `retriever` instance. For the `CodeGeneratorAgent`, instantiate a new `WorkerRetriever` that loads knowledge from `docs/coding-best-practices.md` (you can create this dummy doc file)."
+        },
+        {
+          "prompt": "STEP 4: Create a new tool `src/tools/workerKnowledgeSearch.ts`. This tool will use the worker's dedicated retriever instance to search for information. Add this tool to the default set of tools available to all worker agents."
+        },
+        {
+          "prompt": "STEP 5: Update the base worker prompt in `src/prompts/index.ts`. Add a new instruction: 'Before attempting complex tasks, you MUST use the `worker_knowledge_search` tool to find relevant information in your dedicated knowledge base.'"
+        }
+      ]
+    }
+  ]
+}

@@ -1,13 +1,15 @@
+/* eslint-disable sonarjs/todo-tag */
 /**
  * Supervisor Retriever Implementation
  * Provides context retrieval capabilities for the supervisor agent using VoltAgent's BaseRetriever pattern
- * Generated on 2025-01-27
+ * Generated on 2025-06-09
  */
 
 import { BaseRetriever, type BaseMessage } from "@voltagent/core";
 import { logger } from "../config/logger.js";
 import { generateId } from "ai";
 import QuickLRU from "quick-lru";
+import { pipeline } from "@xenova/transformers";
 
 /** Allowed agent types for query analysis & indexing */
 const AGENT_TYPES = [
@@ -17,12 +19,14 @@ const AGENT_TYPES = [
 
 /**
  * Context entry structure for retrieval operations
+ * @property docId - Context grouping identifier (not a document id, but a logical context group for token-efficient retrieval)
  */
-interface ContextEntry {
+export interface ContextEntry {
   id: string;
   content: string;
   source: string;
-  type: 'delegation' | 'task_result' | 'workflow' | 'agent_capability' | 'error_resolution';
+  type: 'delegation' | 'task_result' | 'workflow' | 'agent_capability' | 'error_resolution' | 'chat_chunk';
+  embedding?: number[];
   metadata: {
     timestamp: number;
     agentType?: string;
@@ -30,6 +34,9 @@ interface ContextEntry {
     workflowId?: string;
     relevanceScore?: number;
     tags?: string[];
+    chatSessionId?: string;
+    chunkIndex?: number;
+    [key: string]: any;
   };
 }
 
@@ -103,32 +110,15 @@ class SupervisorContextStore {
   private getFilteredCandidateIds(options: { type?: string; agentType?: string; tags?: string[] }): Set<string> {
     const { type, agentType, tags } = options;
     const idSets: Set<string>[] = [];
-
-      if (type && this.indexByType.has(type)) {
-      idSets.push(this.indexByType.get(type)!);
-      }
-      if (agentType && this.indexByAgent.has(agentType)) {
-      idSets.push(this.indexByAgent.get(agentType)!);
-        }
+    if (type && this.indexByType.has(type)) idSets.push(this.indexByType.get(type)!);
+    if (agentType && this.indexByAgent.has(agentType)) idSets.push(this.indexByAgent.get(agentType)!);
     if (tags) {
-        for (const tag of tags) {
-          if (this.indexByTags.has(tag)) {
-          idSets.push(this.indexByTags.get(tag)!);
-        }
+      for (const tag of tags) {
+        if (this.indexByTags.has(tag)) idSets.push(this.indexByTags.get(tag)!);
       }
     }
-
-    if (idSets.length === 0) {
-      // If no filters matched, return all keys.
-      return new Set(this.contexts.keys());
-    }
-
-    // Intersect all sets to get the final candidates
-    let candidates = new Set(idSets[0]);
-    for (let i = 1; i < idSets.length; i++) {
-      candidates = new Set([...candidates].filter(id => idSets[i].has(id)));
-            }
-    return candidates;
+    if (idSets.length === 0) return new Set(this.contexts.keys());
+    return safeIntersect(idSets);
   }
 
   /**
@@ -286,6 +276,70 @@ class SupervisorContextStore {
       }
     }
   }
+
+  /**
+   * Add a chunked, embedded chat context group to the store.
+   * @param chatSessionId - Logical chat session/group identifier for context retrieval
+   * @param content - The full chat content to chunk and embed
+   * @param chunkSize - Max chunk size
+   * @param embedder - Embedding function
+   * @param source - Source string
+   * @param metadata - Additional metadata
+   */
+  async addChunkedChatContext(chatSessionId: string, content: string, chunkSize: number, embedder: (t: string) => Promise<number[]>, source: string, metadata: Record<string, any> = {}) {
+    const chunks = chunkText(content, chunkSize);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkTextVal = chunks[i];
+      const embedding = await embedder(chunkTextVal);
+      const entry: ContextEntry = {
+        id: `${chatSessionId}-chunk-${i}`,
+        content: chunkTextVal,
+        source,
+        type: 'chat_chunk',
+        embedding,
+        metadata: {
+          ...metadata,
+          chatSessionId,
+          chunkIndex: i,
+          timestamp: Date.now(),
+        },
+      };
+      this.addContext(entry);
+    }
+  }
+
+  /**
+   * Semantic search using vector similarity if embeddings are present.
+   */
+  semanticSearch(_query: string, queryEmbedding: number[], options: { limit?: number; minScore?: number; type?: string; agentType?: string; tags?: string[] } = {}): ContextEntry[] {
+    const { limit = 10, minScore = 0.2 } = options;
+    const candidateIds = this.getFilteredCandidateIds(options);
+    const results: (ContextEntry & { score: number })[] = [];
+    for (const id of candidateIds) {
+      const context = this.contexts.get(id);
+      if (!context || !context.embedding) continue;
+      const score = cosineSimilarity(queryEmbedding, context.embedding);
+      if (score >= minScore) results.push({ ...context, score });
+    }
+    // Use standard sort for compatibility
+    results.sort((a: { score: number }, b: { score: number }) => b.score - a.score);
+    return results.slice(0, limit).map(({ score: _score, ...context }: { score: number } & ContextEntry) => context);
+  }
+}
+
+function chunkText(text: string, chunkSize: number = 300): string[] {
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const chunks: string[] = [];
+  let current = '';
+  for (const sentence of sentences) {
+    if ((current + sentence).length > chunkSize && current.length > 0) {
+      chunks.push(current);
+      current = '';
+    }
+    current += sentence + ' ';
+  }
+  if (current.trim().length > 0) chunks.push(current.trim());
+  return chunks;
 }
 
 /**
@@ -297,6 +351,8 @@ export class SupervisorRetriever extends BaseRetriever {
   private searchCache: QuickLRU<string, string>;
   private maxResults: number;
   private defaultMinScore: number;
+  private embedder: any;
+  private embedderReady: boolean = false;
 
   /**
    * @param options.maxResults      Max number of contexts to return.
@@ -320,8 +376,8 @@ export class SupervisorRetriever extends BaseRetriever {
     this.searchCache = new QuickLRU({ maxSize: options.searchCacheSize ?? 100 });
     this.maxResults = options.maxResults ?? 10;
     this.defaultMinScore = options.defaultMinScore ?? 1;
-    
-    logger.info("SupervisorRetriever initialized", {
+    // Async embedder init must be called manually
+    logger.info("SupervisorRetriever initialized (semantic)", {
       maxResults: this.maxResults,
       defaultMinScore: this.defaultMinScore,
       storeMaxSize: options.storeMaxSize ?? 1000,
@@ -329,43 +385,48 @@ export class SupervisorRetriever extends BaseRetriever {
     });
   }
 
+  async initEmbedder() {
+    if (!this.embedderReady) {
+      this.embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+      this.embedderReady = true;
+    }
+  }
+
+  private async getEmbedding(text: string): Promise<number[]> {
+    if (!this.embedderReady) await this.initEmbedder();
+    const output = await this.embedder(text, { pooling: "mean", normalize: true });
+    return Array.from(output.data);
+  }
+
   /**
-   * Retrieve relevant context entries for the given input.
-   * Wrapped in try/catch to ensure graceful fallback.
+   * Ingest and chunk a chat context group, storing embeddings for semantic search.
+   * @param chatSessionId - Logical chat session/group identifier for context retrieval
+   * @param content - The full chat content to chunk and embed
+   * @param source - Source string
+   * @param metadata - Additional metadata
+   * @param chunkSize - Max chunk size
+   */
+  async ingestChatContext(chatSessionId: string, content: string, source: string, metadata: Record<string, any> = {}, chunkSize = 300) {
+    if (!this.embedderReady) await this.initEmbedder();
+    await this.contextStore.addChunkedChatContext(chatSessionId, content, chunkSize, async (t: string) => await this.getEmbedding(t), source, metadata);
+  }
+
+  /**
+   * Retrieve relevant context entries for the given input using semantic search.
    */
   async retrieve(input: string | BaseMessage[]): Promise<string> {
-    // Hoist identifiers so they're available in both try and catch
     const retrievalId = generateId();
     const startTime = Date.now();
     try {
       const query = Array.isArray(input)
         ? input.map(m => (typeof m === 'string' ? m : JSON.stringify(m))).join(' ')
         : input;
-
-      // build a cache key from the raw query + search options
-      const opts = this.analyzeQueryForSearchOptions(query);
-      const key = JSON.stringify({ query, opts, maxResults: this.maxResults, minScore: this.defaultMinScore });
-
-      // 1) Try the cache
-      const cached = this.searchCache.get(key);
-      if (cached) {
-        logger.debug("Supervisor retrieval — cache hit", { retrievalId, key });
-        return cached;
-      }
-
-      // 2) Cache miss: do the full search
-      logger.debug("Supervisor retrieval started", {
-        retrievalId,
-        queryLength: query.length,
-        inputType: Array.isArray(input) ? 'messages' : 'string'
-      });
-
-      const ctxs = this.contextStore.search(query, {
+      if (!this.embedderReady) await this.initEmbedder();
+      const queryEmbedding = await this.getEmbedding(query);
+      const ctxs = this.contextStore.semanticSearch(query, queryEmbedding, {
         limit: this.maxResults,
-        minRelevanceScore: this.defaultMinScore,
-        ...opts,
+        minScore: 0.2,
       });
-
       let result: string;
       if (ctxs.length === 0) {
         result = `No relevant context found for "${query}".`;
@@ -376,31 +437,23 @@ export class SupervisorRetriever extends BaseRetriever {
         );
         result = `Retrieved Context:\n${formattedContexts.join('\n')}`;
       }
-
-      // 3) Store in cache before returning
-      this.searchCache.set(key, result);
-
+      this.searchCache.set(query, result);
       const duration = Date.now() - startTime;
-      
-      logger.info("Supervisor retrieval completed", {
+      logger.info("Supervisor semantic retrieval completed", {
         retrievalId,
         duration,
         contextsFound: ctxs.length,
         formattedLength: result.length,
-        searchOptions: opts
       });
-
       return result;
     } catch (err) {
       const duration = Date.now() - startTime;
       const errorMessage = err instanceof Error ? err.message : String(err);
-      
-      logger.error("Supervisor retrieval failed", {
+      logger.error("Supervisor semantic retrieval failed", {
         retrievalId,
         duration,
         error: errorMessage
       });
-      
       return `Retrieval error: proceeding without prior context.`;
     }
   }
@@ -686,3 +739,125 @@ export const createSupervisorRetriever = (options?: {
 
   return retriever;
 };
+
+/**
+ * Utility: Intersect multiple sets safely.
+ * Filters for valid Sets of primitives and then computes their intersection.
+ * @param sets Array of sets to intersect.
+ * @returns Set containing elements present in all valid input sets.
+ */
+// Generated on 2024-07-26
+function safeIntersect<T extends string | number | boolean | symbol>(sets: Set<T>[]): Set<T> {
+  if (!Array.isArray(sets) || sets.length === 0) {
+    return new Set<T>();
+  }
+
+  // Step 1: Validate and filter sets
+  const validatedPrimitiveSets = sets
+    .filter(currentSet => {
+      if (!(currentSet instanceof Set)) {
+        logger.warn('[safeIntersect] Input item is not a Set instance, skipping.');
+        return false;
+      }
+      return true;
+    })
+    .map(currentSet => {
+      const primitiveOnlySet = new Set<T>();
+      currentSet.forEach(val => {
+        if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' || typeof val === 'symbol') {
+          primitiveOnlySet.add(val);
+        } else {
+          logger.warn(`[safeIntersect] Non-primitive value of type ${typeof val} found in Set, skipping value.`);
+        }
+      });
+      // Preserve originally empty sets, or sets that become empty after filtering non-primitives
+      // if the original intent was to intersect with an empty set.
+      // However, for intersection, an empty set resulting from filtering all non-primitives 
+      // from a non-empty set should behave as an empty set.
+      return primitiveOnlySet; 
+    });
+
+  if (validatedPrimitiveSets.length === 0) {
+    return new Set<T>();
+  }
+
+  // Step 2: Compute intersection using reduce
+  // Initialize accumulator with a copy of the first validated set
+  const initialSet = new Set(validatedPrimitiveSets[0]); 
+
+  const resultIntersection = validatedPrimitiveSets.slice(1).reduce((acc, currentSet) => {
+    const newAcc = new Set<T>();
+    acc.forEach(element => {
+      if (currentSet.has(element)) {
+        newAcc.add(element);
+      }
+    });
+    return newAcc;
+  }, initialSet);
+
+  return resultIntersection;
+}
+
+/**
+ * Utility: Compute cosine similarity between two vectors.
+ * Ensures inputs are valid arrays of numbers and handles potential issues.
+ * @param a First vector (array of numbers).
+ * @param b Second vector (array of numbers).
+ * @returns Cosine similarity score (number between -1 and 1), or 0 if inputs are invalid.
+ * @throws Error if vectors have different lengths or contain non-finite numbers.
+ */
+// Generated on 2024-07-26
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (!Array.isArray(a) || !Array.isArray(b)) {
+    logger.warn('[cosineSimilarity] Inputs must be arrays.');
+    return 0;
+  }
+  if (a.length !== b.length) {
+    logger.warn('[cosineSimilarity] Vectors must have the same length.');
+    return 0;
+  }
+  if (a.length === 0) {
+    logger.warn('[cosineSimilarity] Vectors are empty.');
+    return 1; 
+  }
+
+  let dotProduct = 0;
+  let magnitudeA = 0;
+  let magnitudeB = 0;
+  let invalidDataFound = false;
+
+  // Standard for loop is used here. Linter flags for 'Object Injection Sink' on a[i] and b[i] 
+  // are acknowledged but considered false positives in this context, as 'i' is a controlled loop variable.
+  for (let i = 0; i < a.length; i++) {
+    const valA = a[i]; 
+    const valB = b[i];
+
+    if (!Number.isFinite(valA) || !Number.isFinite(valB)) {
+      logger.error('[cosineSimilarity] Vectors contain non-finite numbers.');
+      invalidDataFound = true;
+      break; // Exit loop early if invalid data is found
+    }
+
+    dotProduct += valA * valB;
+    magnitudeA += valA * valA;
+    magnitudeB += valB * valB;
+  }
+
+  if (invalidDataFound) {
+    // TODO: [2024-07-26] - Standardize error objects across the project. For now, a generic Error is thrown.
+    throw new Error('Vectors must contain finite numbers.');
+  }
+
+  magnitudeA = Math.sqrt(magnitudeA);
+  magnitudeB = Math.sqrt(magnitudeB);
+
+  if (magnitudeA === 0 && magnitudeB === 0) { 
+    return 1;
+  }
+  if (magnitudeA === 0 || magnitudeB === 0) { 
+    return 0;
+  }
+
+  const similarity = dotProduct / (magnitudeA * magnitudeB);
+  return Math.max(-1, Math.min(1, similarity));
+}

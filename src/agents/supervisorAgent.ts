@@ -53,7 +53,10 @@ import {
 import { logger } from "../config/logger.js";
 import { env } from "../config/environment.js";
 import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
-import { createSupervisorRetriever, type SupervisorRetriever } from "./supervisorRetriever.js";
+import { 
+  createSupervisorRetriever, 
+  type SupervisorRetriever
+} from "./supervisorRetriever.js";
 import { supervisorPrompts } from "../prompts/index.js";
 import { workerPrompts } from "../prompts/index.js";
 import {
@@ -101,7 +104,7 @@ import {
   listImagesTool,
   buildImageTool,
 } from "../tools/cloudTools.js";
-import { promptManagerToolkit } from "../tools/index.js";
+
 /**
  * Context symbols for type-safe userContext keys
  * Following VoltAgent best practices for avoiding key collisions
@@ -134,6 +137,22 @@ const CONTEXT_KEYS = {
   RETRIEVAL_HISTORY: Symbol("retrievalHistory"),
 } as const;
 
+const validateContextKey = (key: symbol, value: unknown): boolean => {
+  const keyName = key.description?.replace('Symbol(', '').replace(')', '');
+  if (!keyName || !Object.prototype.hasOwnProperty.call(CONTEXT_KEYS, keyName)) {
+    return false;
+  }
+
+  const validators = new Map<symbol, (val: unknown) => boolean>([
+    [CONTEXT_KEYS.SESSION_ID, (val) => typeof val === 'string' && val.length > 0],
+    [CONTEXT_KEYS.DELEGATION_COUNT, (val) => typeof val === 'number' && val >= 0],
+    // Add validators for other context keys
+  ]);
+  
+  const validator = validators.get(key);
+  return validator ? validator(value) : true;
+};
+
 /**
  * Create supervisor-specific hooks for delegation monitoring
  * Enhanced with VoltAgent userContext best practices
@@ -141,12 +160,15 @@ const CONTEXT_KEYS = {
 const createSupervisorHooks = () => createHooks({
   onStart: async ({ agent, context }: OnStartHookArgs) => {
     // Generate unique identifiers for this coordination session
-    const sessionId = `ai-volt-session-${generateId()}`;
+    const sessionId = `session-${generateId()}`;
     const delegationId = `delegation-${generateId()}`;
     const workflowId = `workflow-${generateId()}`;
     
     // Initialize context using symbols for type safety
     context.userContext.set(CONTEXT_KEYS.SESSION_ID, sessionId);
+    if (!validateContextKey(CONTEXT_KEYS.SESSION_ID, sessionId)) {
+      throw new Error('Invalid session ID');
+    }
     context.userContext.set(CONTEXT_KEYS.DELEGATION_ID, delegationId);
     context.userContext.set(CONTEXT_KEYS.WORKFLOW_ID, workflowId);
     context.userContext.set(CONTEXT_KEYS.DELEGATION_START, Date.now());
@@ -161,7 +183,7 @@ const createSupervisorHooks = () => createHooks({
     context.userContext.set(CONTEXT_KEYS.RETRIEVAL_COUNT, 0);
     context.userContext.set(CONTEXT_KEYS.RETRIEVAL_HISTORY, [] as Array<{ query: string; timestamp: number }>);
     
-    logger.info(`[${agent.name}] AI-Volt coordination session started`, {
+    logger.info(`[${agent.name}] Coordination session started`, {
       sessionId,
       delegationId,
       workflowId,
@@ -169,8 +191,8 @@ const createSupervisorHooks = () => createHooks({
       coordinator: agent.name,
       timestamp: new Date().toISOString()
     });
-  },
 
+  },
   onEnd: async ({ agent, output, error, context }: OnEndHookArgs) => {
     logSessionSummary({ agent, output, error, context });
   },
@@ -269,8 +291,18 @@ const createSupervisorHooksWithRetriever = (baseHooks: ReturnType<typeof createH
       await baseHooks.onStart?.({ agent, context });
       
       // Initialize retriever context tracking
-      context.userContext.set("retrieverEnabled", true);
-      context.userContext.set("contextRetrievals", 0);
+      context.userContext.set(CONTEXT_KEYS.RETRIEVER_ENABLED, true);
+      context.userContext.set(CONTEXT_KEYS.CONTEXT_RETRIEVALS, 0);
+      
+      // Initialize embedder for semantic search
+      try {
+        await retriever.initEmbedder();
+        logger.debug(`[${agent.name}] Retriever embedder initialized successfully`);
+      } catch (error) {
+        logger.warn(`[${agent.name}] Failed to initialize retriever embedder`, {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
     },
 
     onEnd: async ({ agent, output, error, context }: OnEndHookArgs) => {
@@ -279,17 +311,61 @@ const createSupervisorHooksWithRetriever = (baseHooks: ReturnType<typeof createH
       
       // Add workflow context to retriever if successful
       if (!error && output) {
-        const workflowId = context.userContext.get("workflowId") as string;
-        const activeDelegations = context.userContext.get("activeDelegations") as Set<string>;
+        const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID) as string;
+        const activeDelegations = context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any>;
         
         if (workflowId && activeDelegations && activeDelegations.size > 0) {
-          retriever.addWorkflowContext({
-            description: "Multi-agent coordination workflow",
-            steps: Array.from(activeDelegations),
-            workflowId,
-            status: 'completed',
-            agents: Array.from(activeDelegations).map(taskId => taskId.split('-')[0])
-          });
+          try {
+            retriever.addWorkflowContext({
+              description: "Multi-agent coordination workflow",
+              steps: Array.from(activeDelegations.keys()),
+              workflowId,
+              status: 'completed',
+              agents: Array.from(activeDelegations.values()).map((delegation: any) => delegation.agentType)
+            });
+          } catch (retrievalError) {
+            logger.warn(`[${agent.name}] Failed to add workflow context to retriever`, {
+              error: retrievalError instanceof Error ? retrievalError.message : String(retrievalError),
+              workflowId
+            });
+          }
+        }
+
+        // Ingest conversation context for future retrieval
+        const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID) as string;
+        let outputText: string | null = null;
+        // eslint-disable-next-line sonarjs/no-gratuitous-expressions
+        if (output && typeof output === 'object') {
+          if ('type' in output && output.type === 'text' && 'text' in output && typeof output.text === 'string') {
+            outputText = output.text;
+          } else if ('type' in output && output.type === 'object' && 'object' in output && output.object && typeof (output.object as any).text === 'string') {
+            // Fallback for cases where text might be nested in a generic object result
+            outputText = (output.object as any).text;
+          } else if ('text' in output && typeof output.text === 'string'){
+            // Broader check if type discriminator is missing but text property exists
+            outputText = output.text;
+          }
+        }
+
+        if (sessionId && outputText) { // outputText is now confirmed string or null
+          try {
+            await retriever.ingestChatContext(
+              sessionId,
+              outputText, // Now correctly typed
+              'supervisor_agent',
+              {
+                operationId: context.operationId,
+                timestamp: Date.now(),
+                workflowId
+              }
+            );
+            logger.debug(`[${agent.name}] Chat context ingested for session ${sessionId}`);
+          } catch (ingestError) {
+            logger.warn(`[${agent.name}] Failed to ingest chat context`, {
+              error: ingestError instanceof Error ? ingestError.message : String(ingestError),
+              sessionId
+            });
+          }
         }
       }
     },
@@ -342,7 +418,7 @@ const createSupervisorHooksWithRetriever = (baseHooks: ReturnType<typeof createH
 
           const success = !error;
           let agentType = "unknown";
-          const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding', 'promptManager', 'debug', 'research', 'knowledgeBase', 'data', 'cloud'];
+          const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding', 'debug', 'research', 'knowledgeBase', 'data', 'cloud'];
           for (const type of agentTypes) {
             if (resultStrForRetriever.toLowerCase().includes(type)) {
               agentType = type;
@@ -392,19 +468,12 @@ const createSupervisorHooksWithRetriever = (baseHooks: ReturnType<typeof createH
 };
 // Get toolkit, automatically adding instructions & examples to system prompt
 /**
-  * The default reasoning toolkit, which automatically adds instructions and examples
-  * to the system prompt for enhanced reasoning capabilities.
-  */
-const reasoningToolkit: Toolkit = createReasoningTools(); // Uses defaults
-
-/**
   * A reasoning toolkit configured for "think-only" mode.
   * This toolkit enables analysis but does not add instructions to the system prompt.
   */
 const thinkOnlyToolkit: Toolkit = createReasoningTools({
   think: true,
   addFewShot: false,
-  fewShotExamples: "{Example: 'this is an example of a few shot example', Example2: 'this is another example of a few shot example'}",
   analyze: true,
   addInstructions: false,
 });
@@ -420,6 +489,7 @@ const createSupervisorMemory = () => {
     debug: env.NODE_ENV === "development"
   });
 };
+
 
 /**
  * Create and configure the supervisor agent
@@ -437,10 +507,10 @@ export const createSupervisorAgent = async () => {
 
     // 1) Create retriever with both storeMaxSize and searchCacheSize + tool metadata
     const retriever = createSupervisorRetriever({
-      maxResults: 15,
-      defaultMinScore: 1,
-      storeMaxSize: 1000,                // keep up to 1000 context entries
-      searchCacheSize: 200,              // cache last 200 distinct queries
+      maxResults: SUPERVISOR_CONFIG.RETRIEVER.MAX_RESULTS,
+      defaultMinScore: SUPERVISOR_CONFIG.RETRIEVER.DEFAULT_MIN_SCORE,
+      storeMaxSize: SUPERVISOR_CONFIG.RETRIEVER.STORE_MAX_SIZE,
+      searchCacheSize: SUPERVISOR_CONFIG.RETRIEVER.SEARCH_CACHE_SIZE,
       toolName: "supervisor_search",     // tool name exposed to LLM
       toolDescription: "Fetch recent supervisor context with in-memory LRU caching",
     });
@@ -467,12 +537,12 @@ export const createSupervisorAgent = async () => {
         } satisfies GoogleGenerativeAIProviderOptions,
       },
       tools: [
-        reasoningToolkit,
+        thinkOnlyToolkit,
         calculatorTool,
         dateTimeTool,
         systemInfoTool,
         webSearchTool,
-//        retriever.tool,                // <— now a selectable tool with caching
+        retriever.tool,                // Enable semantic context retrieval
         fetchRepoStarsTool,
         fetchRepoContributorsTool,
       ],
@@ -484,7 +554,7 @@ export const createSupervisorAgent = async () => {
         workers.git,
         workers.browser,
         workers.coding,
-        workers.promptManager,
+//        workers.promptManager,
         workers.debug,
         workers.research,
         workers.knowledgeBase,
@@ -647,7 +717,15 @@ export const createWorkerAgents = async () => {
       instructions: workerPrompts.generate("calculator")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [calculatorTool, statisticsAnalysisTool],
       memory: createWorkerMemory("calculator"),
       hooks: createWorkerHooks("calculator"),
@@ -659,7 +737,16 @@ export const createWorkerAgents = async () => {
       purpose: "Handles date/time operations, formatting, scheduling, and timezone conversions.",
       instructions: workerPrompts.generate("datetime")(),
       llm: new VercelAIProvider(),
-      model: google("gemini-2.0-flash"),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [dateTimeTool],
       memory: createWorkerMemory("datetime"),
       hooks: createWorkerHooks("datetime"),
@@ -671,7 +758,16 @@ export const createWorkerAgents = async () => {
       purpose: "Provides system monitoring, performance checks, and diagnostics.",
       instructions: workerPrompts.generate("systemInfo")(),
       llm: new VercelAIProvider(),
-      model: google("gemini-2.0-flash"),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [systemInfoTool],
       memory: createWorkerMemory("systeminfo"),
       hooks: createWorkerHooks("systeminfo"),
@@ -683,7 +779,16 @@ export const createWorkerAgents = async () => {
       purpose: "Manages complex file operations and file management tasks.",
       instructions: workerPrompts.generate("fileOps")(),
       llm: new VercelAIProvider(),
-      model: google("gemini-2.0-flash"),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         readFileTool,
         writeFileTool,
@@ -706,7 +811,15 @@ export const createWorkerAgents = async () => {
       instructions: workerPrompts.generate("git")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         enhancedGitStatusTool,
         secureGitScriptTool,
@@ -745,7 +858,15 @@ export const createWorkerAgents = async () => {
       instructions: workerPrompts.generate("research")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         webSearchTool,
         extractTextTool,
@@ -768,7 +889,15 @@ export const createWorkerAgents = async () => {
       instructions: workerPrompts.generate("coding")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {google: {thinkingConfig: {thinkingBudget: 2048,},} satisfies GoogleGenerativeAIProviderOptions,},
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         sandboxedCodeExecutorTool,
         lintCodeTool,
@@ -787,21 +916,29 @@ export const createWorkerAgents = async () => {
     });
 
     // Prompt Management worker agent - NEW 2025 enhancement
-    const promptManagerWorker = new Agent({
-      name: "PromptManagerAgent",
-      purpose: "Manages prompt engineering, optimization, and security analysis of prompts.",
-      instructions: workerPrompts.generate("promptManager")(),
-      llm: new VercelAIProvider(),
-      model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {google: {thinkingConfig: {thinkingBudget: 1024,},} satisfies GoogleGenerativeAIProviderOptions,},
-      tools: [
-        promptManagerToolkit,
-        calculatorTool, // For scoring and metrics
-        webSearchTool, // For researching latest techniques
-      ],
-      memory: createWorkerMemory("prompt_manager"),
-      hooks: createWorkerHooks("prompt_manager"),
-    });
+//    const promptManagerWorker = new Agent({
+//      name: "PromptManagerAgent",
+//      purpose: "Manages prompt engineering, optimization, and security analysis of prompts.",
+//      instructions: workerPrompts.generate("promptManager")(),
+//      llm: new VercelAIProvider(),
+//      model: google('gemini-2.5-flash-preview-05-20'),
+//      providerOptions: {
+//        google: {
+//          thinkingConfig: {
+//            thinkingBudget: 0,
+//            includeThoughts: false,
+//          },
+//          responseModalities: ["TEXT", "IMAGE"],
+//        } satisfies GoogleGenerativeAIProviderOptions,
+//      },
+//      tools: [
+//        promptManagerToolkit,
+//        calculatorTool, // For scoring and metrics
+//        webSearchTool, // For researching latest techniques
+//      ],
+//      memory: createWorkerMemory("prompt_manager"),
+//      hooks: createWorkerHooks("prompt_manager"),
+//    });
 
     // Debug worker agent - uses the coding tools for file oprations
     const debugWorker = new Agent({
@@ -809,7 +946,16 @@ export const createWorkerAgents = async () => {
       purpose: "Handles debugging, error diagnosis, and issue resolution.",
       instructions: workerPrompts.generate("debug")(),
       llm: new VercelAIProvider(),
-      model: google("gemini-2.0-flash"),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         runIsolatedCodeTool,
         lintCodeTool,
@@ -827,7 +973,15 @@ export const createWorkerAgents = async () => {
       instructions: workerPrompts.generate("browser")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         navigationTool,
         screenshotTool,
@@ -847,7 +1001,15 @@ export const createWorkerAgents = async () => {
       instructions: workerPrompts.generate("knowledgeBase")(),
       llm: new VercelAIProvider(),
       model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {google: {thinkingConfig: {thinkingBudget: 0,},} satisfies GoogleGenerativeAIProviderOptions,},
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         ingestDocumentTool,
         queryKnowledgeBaseTool,
@@ -864,7 +1026,16 @@ export const createWorkerAgents = async () => {
       purpose: "Handles data manipulation, analysis, and transformation from local files.",
       instructions: workerPrompts.generate("data")(),
       llm: new VercelAIProvider(),
-      model: google("gemini-2.0-flash"),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         readDataFromFileTool,
         analyzeCsvDataTool,
@@ -880,7 +1051,16 @@ export const createWorkerAgents = async () => {
       purpose: "Manages cloud resources, deployment, and monitoring, interacting with Docker.",
       instructions: workerPrompts.generate("cloud")(),
       llm: new VercelAIProvider(),
-      model: google("gemini-2.0-flash"),
+      model: google('gemini-2.5-flash-preview-05-20'),
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 0,
+            includeThoughts: false,
+          },
+          responseModalities: ["TEXT", "IMAGE"],
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       tools: [
         deployServiceTool,
         listContainersTool,
@@ -903,7 +1083,7 @@ export const createWorkerAgents = async () => {
       git: gitWorker,
       browser: browserWorker,
       coding: codingWorker,
-      promptManager: promptManagerWorker,
+//      promptManager: promptManagerWorker,
       debug: debugWorker,
       research: researchWorker,
       knowledgeBase: knowledgeBaseWorker,
@@ -1026,3 +1206,24 @@ function handleDelegationEnd({ agent, tool, output, error, context }: OnToolEndH
   }
 }
 
+// Extract to a configuration object
+const SUPERVISOR_CONFIG = {
+  MEMORY: {
+    STORAGE_LIMIT: 500,
+    WORKER_STORAGE_LIMIT: 200,
+  },
+  RETRIEVER: {
+    MAX_RESULTS: 15,
+    DEFAULT_MIN_SCORE: 1,
+    STORE_MAX_SIZE: 1000,
+    SEARCH_CACHE_SIZE: 200,
+  },
+  MODELS: {
+    THINKING_BUDGET: 512,
+    WORKER_THINKING_BUDGET: 0,
+  },
+  LOGGING: {
+    PREVIEW_LENGTH: 100,
+    RESULT_TRUNCATE_LENGTH: 500,
+  }
+} as const;

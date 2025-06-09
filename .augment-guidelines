@@ -1,0 +1,156 @@
+---
+title: Augment Guidelines for the AI-Volt Project
+description: The definitive architectural constitution, engineering philosophy, and AI operational guide for the AI-Volt platform. This document is based on the principles outlined in the [Volt Architecture Review](https://github.com/ssdeanx/ai-volt/blob/main/docs/architecture-review.md).
+version: 1.0.0
+date: 2025-06-09
+author: '@ssdeanx (with AI-Augmented Architecture Review)'
+repository: https://www.github.com/ssdeanx/ai-volt
+glob:
+  - "src/**/*.ts"
+  - "src/agents/**/*.ts"
+  - "src/config/**/*.ts"
+  - "src/types/**/*.ts"
+  - "src/tools/**/*.ts"
+  - "src/prompts/**/*.ts"
+  - "README.md"
+  - "CHANGELOG.md"
+  - "eslint.config.ts"
+  - "package.json"
+  - "tsconfig.json"
+  - ".env.example"
+tags: [project-guidelines, voltagent, typescript, architectural-doctrine, code-quality, security, RAG, multi-agent, prompt-engineering, ai-onboarding, tsdoc]
+---
+
+# Augment Guidelines for the AI-Volt Project
+
+This document represents the definitive architectural constitution, engineering philosophy, and operational guide for the AI-Volt platform. It is designed to be the single source of truth for all development, both by human engineers and AI agents. Its purpose is to ensure scalability, maintainability, and security by enforcing a strict and consistent set of rules and patterns. Adherence is not optional; it is mandatory for all contributions.
+
+### **Table of Contents**
+1.  **AI Agent Onboarding & Operational Framework**
+2.  **Core Philosophy & Architectural Doctrine**
+3.  **Best Practices & Development Patterns**
+4.  **Anti-Patterns & Forbidden Practices**
+5.  **Code Quality & Security Mandate**
+6.  **Known Architectural Deficiencies & Improvement Areas (TODOs)**
+
+---
+
+## 1. AI Agent Onboarding & Operational Framework
+
+**Purpose of this Section:** This section serves as your primary bootloader and system prompt. It is the most important part of this document for you, the Augment agent. By internalizing these instructions first, you can accurately parse intent, follow complex instructions, and generate code that aligns perfectly with this project's architectural and quality standards.
+
+### 1.1. Your Core Directives
+
+1.  **Adhere to All Rules**: You **MUST** read, understand, and follow every rule outlined in this entire document without exception. This document is your primary context.
+2.  **Prioritize Quality & Security**: Your primary goal is not just to generate code that works, but to generate code that is clean, secure, and maintainable according to the doctrines in Part 5.
+3.  **Think in Steps**: You **MUST NOT** attempt to solve complex problems in a single step. You must follow the reasoning framework defined below.
+4.  **Ask for Clarification**: If a request is ambiguous or contradicts a rule in this document, you **MUST** ask for clarification before proceeding.
+
+### 1.2. The Required "Chain of Thought" Reasoning Framework
+
+For any non-trivial task, you **MUST** follow this explicit four-step cognitive process:
+
+1.  **Deconstruct the Goal**: Re-state the user's objective in simple terms to confirm understanding.
+2.  **Formulate a Plan**: Break the objective down into a numbered list of sequential, concrete steps. Identify the tools and files needed.
+3.  **Execute Step-by-Step**: Execute the plan one step at a time, confirming the result of each step before proceeding.
+4.  **Verify and Report**: Perform a final verification (e.g., check for lint errors) and report a summary of the work done.
+
+### 1.3. How to Understand and Use Your Tools
+
+* **Primacy of the Zod Schema**: The `parameters` Zod schema in a tool's definition is your **absolute source of truth**. You **MUST** trust the `.describe()` annotations for each parameter to understand its purpose and format.
+* **Atomic Tool Usage**: Tools are designed to be atomic. You **MUST** chain tools together to accomplish complex tasks.
+* **Error Interpretation**: When a tool throws an error, you **MUST** read the error message carefully. Analyze the error and either adjust the input or formulate a new plan.
+* **Tool Discovery**: Your complete set of available tools is defined in `/src/tools/index.ts`. Refer to this file to understand your capabilities.
+
+---
+
+## 2. Core Philosophy & Architectural Doctrine
+
+This section defines the fundamental operational model, principles, and vision of the AI-Volt platform.
+
+* **2.1. The Mission**: AI-Volt is an **autonomous task orchestration platform**, not a chatbot. Its purpose is to execute complex workflows reliably and securely.
+* **2.2. The Supervisor-Sub-Agent Model**: The platform uses a formal Supervisor-Sub-Agent model.
+    * **The Supervisor as a "System Kernel"**: The Supervisor Agent (`supervisorAgent.ts`) **MUST** only plan and delegate tasks via the `delegate_tasks` tool.
+    * **The Sub-Agent as a "Specialized Service"**: Each Sub-Agent **MUST** adhere to the Single Responsibility Principle, with its capabilities defined exclusively by its tools.
+* **2.3. The Principle of Least Privilege**: Agents and tools **MUST** only be granted the absolute minimum permissions required for their function.
+
+---
+
+## 3. Best Practices & Development Patterns
+
+This section details the mandatory "AI-Volt way" of building software.
+
+### 3.1. TSDoc Documentation Mandate
+
+* **Rule**: All new public functions, classes, types, and interfaces **MUST** be documented with comprehensive TSDoc comments. This is a non-negotiable requirement for maintainability.
+* **Example of a Perfect TSDoc Block**:
+    ```typescript
+    /**
+     * Retrieves a user from the database by their unique email address.
+     * @param {string} email - The email address of the user to retrieve.
+     * @returns {Promise<User | null>} A promise that resolves to the User object or null if not found.
+     * @throws {Error} Throws an error if the database connection fails.
+     */
+    ```
+
+### 3.2. Tool Development Best Practices
+
+* **Comprehensive Zod Schemas**: Every tool's `parameters` **MUST** be a Zod schema with detailed `.describe()` annotations for every parameter.
+* **Robust Error Handling**: Every tool's `execute` function **MUST** be wrapped in a `try...catch` block, re-throwing a new `Error` with a message useful to the calling agent.
+* **Atomic Design**: Tools **MUST** be atomic and single-purpose. Do not create a single tool that reads a file and then analyzes it; create two separate tools.
+
+### 3.3. State Management Hierarchy
+
+* **1. `userContext` (Ephemeral)**: For passing temporary, per-request data between agents.
+* **2. `Memory` (Conversational)**: For user-facing conversation history, using a persistent provider.
+* **3. `Retriever` (Knowledge)**: For semi-static, external knowledge (RAG).
+
+### 3.4. Code Style and Patterns
+
+* **Immutability**: Prefer immutable data structures and functional patterns to reduce side effects.
+* **Constants for Magic Values**: Hardcoded strings and numbers used in logic **MUST** be extracted into clearly named constants.
+
+---
+
+## 4. Anti-Patterns & Forbidden Practices
+
+This is a non-exhaustive list of practices that are explicitly forbidden.
+
+* **4.1. Direct Code Execution**: The *only* approved method is via the `sandboxed_code_executor` tool.
+* **4.2. Prototype Pollution**: Never use untrusted input to dynamically construct object keys.
+* **4.3. Direct Logging**: `console.log` is forbidden in committed code. Use the structured `logger` exclusively.
+* **4.4. High Cognitive Complexity**: Functions that are too long, nested, or have too many parameters **MUST** be refactored.
+* **4.5. Code Duplication**: Logic copied and pasted instead of being extracted into a reusable utility is forbidden.
+
+---
+
+## 5. Code Quality & Security Mandate
+
+This project treats code quality and security as a feature, enforced by our tooling.
+
+* **5.1. The SonarJS Doctrine**: All code **MUST** adhere to `sonarjs:recommended` rules.
+* **5.2. The Snyk Doctrine**: All 'critical' and 'high' severity dependency vulnerabilities **MUST** be remediated.
+* **5.3. The `eslint-plugin-security` Doctrine**: New code **MUST NOT** introduce security rule violations.
+* **5.4. The TypeScript Strictness Mandate**: The `tsconfig.json` is set to `"strict": true`. Use of `@ts-ignore` or `any` is forbidden.
+
+---
+
+## 6. Known Architectural Deficiencies & Improvement Areas (TODOs)
+
+This section documents known areas of technical debt or incomplete features. You **MUST** be aware of these when performing tasks to avoid building on unstable foundations and to help contribute to their resolution.
+
+* **TODO: Implement Production-Grade Memory**
+    * **Problem**: The project currently uses `InMemoryStorage`, which is lost on restart. This is not viable for production.
+    * **Solution**: The `SupervisorAgent`'s memory provider **MUST** be upgraded to use `LibSQLStorage`, pointing to a persistent database. The `aiconfig.json` recipe `SETUP_PERSISTENT_MEMORY` should be used to guide this task.
+
+* **TODO: Establish Comprehensive Test Coverage**
+    * **Problem**: The project has `vitest` installed but lacks a meaningful test suite, posing a significant risk to stability.
+    * **Solution**: A `tests/` directory must be created. Initial priorities are unit tests for critical tools and an integration test for the `delegate_tasks` tool.
+
+* **TODO: Implement Production-Grade Observability**
+    * **Problem**: Debugging agent behavior without proper tracing is nearly impossible.
+    * **Solution**: LangFuse is the designated observability platform. The `LangfuseExporter` **MUST** be integrated with the main `VoltAgent` instance for production environments. The `aiconfig.json` recipe `INTEGRATE_LANGFUSE_OBSERVABILITY` should be used.
+
+* **TODO: Enhance RAG with Advanced Retrieval**
+    * **Problem**: The current `supervisorRetriever.ts` is a basic similarity search and is not sufficiently advanced.
+    * **Solution**: The retriever **MUST** be refactored to include at least one advanced RAG technique. The recommended approach is **Query Transformation**, where the user's raw query is first rewritten by the LLM to be more optimal for vector search before the retrieval step is performed.

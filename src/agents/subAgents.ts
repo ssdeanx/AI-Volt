@@ -12,6 +12,7 @@ import {
   type Toolkit, 
   type Tool,
 } from "@voltagent/core";
+import LibSQLVector from "@voltagent/core"
 import { VercelAIProvider } from "@voltagent/vercel-ai";
 import { google } from "@ai-sdk/google";
 import { generateId } from "ai";

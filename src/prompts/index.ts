@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * AI-Volt Advanced Prompt Management System (2025 Enhanced)
  * 
@@ -63,7 +64,7 @@ COMMUNICATION:
 
 Always apply security validation first, then delegate using the delegate_task tool for optimal, secure results.`,
   variables: {
-    agentName: "AI-Volt Supervisor",
+    agentName: "Supervisor",
     roleDescription: "Coordinates specialized workers using secure, adaptive delegation.",
     communicationStyle: "Professional, concise, and security-aware",
   }
@@ -161,7 +162,7 @@ SPECIALIZED CAPABILITIES:
 
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Calculator Agent",
+      agentName: "Calculator Agent",
       specialization: "Mathematical computations and statistical analysis",
       communicationStyle: "Precise, methodical, showing calculation steps clearly",
     }),
@@ -192,7 +193,7 @@ SPECIALIZED CAPABILITIES:
 
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt DateTime Agent", 
+      agentName: "DateTime Agent", 
       specialization: "Temporal operations and intelligent scheduling",
       communicationStyle: "Time-aware, considering user timezone and preferences",
     }),
@@ -256,7 +257,7 @@ SPECIALIZED CAPABILITIES:
     currentPageUrl: "Unknown",
     playwrightToolNames: "navigate, goBack, goForward, refreshPage, closeBrowser, takeScreenshot, click, typeText, selectOption, check, uncheck, hover, pressKey, getText, getVisibleText, getVisibleHtml, listInteractiveElements, getUserAgent, expectResponse, assertResponse, saveToFile, exportToPdf, extractData, waitForElement",
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Web Browser Agent",
+      agentName: "Web Browser Agent",
       specialization: "Web intelligence and content extraction",
       communicationStyle: "Web-savvy, security-conscious, providing rich extracted content",
     }),
@@ -287,7 +288,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt System Info Agent",
+      agentName: "System Info Agent",
       specialization: "System monitoring, performance checks, and diagnostics",
       communicationStyle: "Precise, data-driven, and focused on system health",
     }),
@@ -317,7 +318,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt File Operations Agent",
+      agentName: "File Operations Agent",
       specialization: "File system operations and secure data handling",
       communicationStyle: "Methodical, security-conscious, and precise in file manipulations",
     }),
@@ -347,7 +348,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Git Agent",
+      agentName: "Git Agent",
       specialization: "Git version control and repository management",
       communicationStyle: "Structured, precise, and focused on version control best practices",
     }),
@@ -377,7 +378,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Research Agent",
+      agentName: "Research Agent",
       specialization: "Information gathering and analysis",
       communicationStyle: "Analytical, informative, and objective",
     }),
@@ -407,7 +408,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Coding Agent",
+      agentName: "Coding Agent",
       specialization: "Code generation, analysis, and development assistance",
       communicationStyle: "Technical, precise, and solution-oriented",
     }),
@@ -437,7 +438,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Knowledge Base Agent",
+      agentName: "Knowledge Base Agent",
       specialization: "Ingestion, management, querying, and summarization of knowledge base documents.",
       communicationStyle: "Informative, precise, and focused on knowledge dissemination.",
     }),
@@ -467,7 +468,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Prompt Manager Agent",
+      agentName: "Prompt Manager Agent",
       specialization: "Prompt engineering and optimization",
       communicationStyle: "Analytical, precise, and focused on prompt quality",
     }),
@@ -497,7 +498,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Debug Agent",
+      agentName: "Debug Agent",
       specialization: "Debugging, error diagnosis, and issue resolution",
       communicationStyle: "Analytical, precise, diagnostic, providing actionable solutions",
     }),
@@ -528,7 +529,7 @@ SPECIALIZED CAPABILITIES:
 
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Data Agent",
+      agentName: "Data Agent",
       specialization: "Local data manipulation, analysis, and transformation",
       communicationStyle: "Precise, data-centric, and focused on data integrity",
     }),
@@ -558,7 +559,7 @@ SPECIALIZED CAPABILITIES:
 {{specializedCapabilities}}`,
   variables: {
     baseWorkerInstructions: workerAgentPrompt({
-      agentName: "AI-Volt Cloud Agent",
+      agentName: "Cloud Agent",
       specialization: "Cloud resource management, service deployment, and infrastructure monitoring via Docker",
       communicationStyle: "Structured, precise, operations-focused, providing Docker command results and status updates",
     }),
@@ -635,7 +636,7 @@ DIAGNOSTIC WORKFLOW:
  * Generate worker prompt based on agent type.
  */
 export const generateWorkerPrompt = (agentType: string): () => string => {
-  const agentPrompts: Record<string, PromptCreator<any>> = {
+  const agentPrompts = {
     calculator: calculatorAgentPrompt,
     datetime: dateTimeAgentPrompt,
     browser: webBrowserAgentPrompt,
@@ -649,10 +650,11 @@ export const generateWorkerPrompt = (agentType: string): () => string => {
     knowledgeBase: knowledgeBaseAgentPrompt,
     data: dataAgentPrompt,
     cloud: cloudAgentPrompt,
-  };
+  } as const;
 
+  // Validate agentType using type-safe check
   if (agentType in agentPrompts) {
-    return agentPrompts[agentType];
+    return agentPrompts[agentType as keyof typeof agentPrompts];
   }
 
   // Fallback for any worker type not explicitly defined
@@ -661,7 +663,6 @@ export const generateWorkerPrompt = (agentType: string): () => string => {
     specialization: `${agentType} domain operations`,
   });
 };
-
 // ================================================================================================
 // ERROR HANDLING & FALLBACK PROMPTS
 // ================================================================================================
@@ -764,40 +765,64 @@ export type UtilityPromptType = keyof typeof utilityPrompts;
 
 /**
  * Helper function to get prompt by type and variant
+ * @param type - The type of prompt collection to use
+ * @param variant - The specific prompt variant within the collection
+ * @param variables - Optional variables to pass to the prompt creator
+ * @returns The generated prompt string
+ * @throws Error if the prompt type/variant combination is invalid
  */
 export const getPrompt = (
   type: 'supervisor' | 'worker' | 'utility',
   variant: SupervisorPromptType | WorkerPromptType | UtilityPromptType,
-  variables?: Record<string, any>
-) => {
-  const promptCollections = { supervisor: supervisorPrompts, worker: workerPrompts, utility: utilityPrompts };
-  const collection = promptCollections[type] as Record<string, unknown>;
-  
-  if (variant in collection) {
-    const promptCreator = collection[variant] as any; // More flexible type for various functions
-    if (typeof promptCreator === 'function') {
-      // Special handling for the 'generate' variant in worker prompts, which returns another function
-      if (type === 'worker' && variant === 'generate') {
+  variables?: Record<string, string>
+): string => {
+  const validTypes = ['supervisor', 'worker', 'utility'] as const;
+  if (!validTypes.includes(type)) {
+    throw new Error(`Invalid prompt type: ${type}`);
+  }
+
+  try {
+    if (type === 'supervisor') {
+      const promptCreator = supervisorPrompts[variant as SupervisorPromptType];
+      if (!promptCreator) {
+        throw new Error(`Invalid supervisor prompt variant: "${String(variant)}"`);
+      }
+      // PromptCreator instances expect an optional object argument
+      return promptCreator(variables || {});
+    } else if (type === 'worker') {
+      if (variant === 'generate') {
         const agentType = variables?.agentType;
         if (typeof agentType !== 'string') {
           throw new Error("For the 'worker.generate' prompt, the 'variables' object must contain an 'agentType' string.");
         }
-        const generatedPromptFn = promptCreator(agentType);
-        return generatedPromptFn(variables);
+        // workerPrompts.generate is (agentType: string) => () => string
+        const promptFunction = workerPrompts.generate(agentType);
+        return promptFunction(); // Call the returned function which takes no arguments
+      } else {
+        // For other worker variants, they are PromptCreator<any>
+        const actualWorkerVariant = variant as Exclude<WorkerPromptType, 'generate'>;
+        const promptCreator = workerPrompts[actualWorkerVariant];
+        if (!promptCreator) {
+            throw new Error(`Invalid worker prompt variant: "${String(actualWorkerVariant)}"`);
+        }
+        // promptCreator is of type PromptCreator<any>
+        return promptCreator(variables || {});
       }
-      // For all other standard prompt creators
+    } else if (type === 'utility') {
+      const promptCreator = utilityPrompts[variant as UtilityPromptType];
+      if (!promptCreator) {
+        throw new Error(`Invalid utility prompt variant: "${String(variant)}"`);
+      }
+      // PromptCreator instances expect an optional object argument
       return promptCreator(variables || {});
     }
+    
+    // This case should ideally be caught by initial type validation if 'type' is not one of the expected literals.
+    throw new Error(`Invalid prompt type or variant combination: ${type}.${String(variant)}`);
+  } catch (error) {
+    throw new Error(`Failed to generate prompt for ${type}.${variant}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-  
-  throw new Error(`Prompt not found: ${type}.${variant}`);
-};
-
-// ================================================================================================
-// TSDoc DOCUMENTATION
-// ================================================================================================
-
-/**
+}/**
  * @fileoverview AI-Volt Prompt Management System
  * 
  * This module provides a comprehensive, type-safe prompt management system for the AI-Volt

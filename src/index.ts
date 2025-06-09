@@ -14,7 +14,7 @@ import { createAIVoltAgent, createSupervisorAgent, createWorkerAgents } from "./
 // Assuming toolCategories are no longer needed here as agent creation functions handle tools.
 import { logger } from "./config/logger.js";
 import { env } from "./config/environment.js";
-import { factCheckerAgent } from "./agents/subAgents.js";
+
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
 
 /**
@@ -44,7 +44,7 @@ async function startAIVolt(): Promise<void> {
 
         // Supervisor for coordinating tasks
         "supervisor": supervisorAgent,
-        "fact-checker": factCheckerAgent,
+//        "fact-checker": factCheckerAgent,
         // Specialized worker agents
         "calculator": workerAgents.calculator,
         "datetime": workerAgents.datetime,
@@ -53,7 +53,7 @@ async function startAIVolt(): Promise<void> {
         "git-ops": workerAgents.git,
         "browser-ops": workerAgents.browser,
         "coding-ops": workerAgents.coding,
-        "prompt-manager": workerAgents.promptManager,
+//        "prompt-manager": workerAgents.promptManager,
         "debug": workerAgents.debug,
         "research": workerAgents.research,
         "knowledge-base": workerAgents.knowledgeBase, 
@@ -107,7 +107,6 @@ async function startAIVolt(): Promise<void> {
         git: "Git version control",
         browser: "Web browsing and scraping",
         coding: "Code execution and analysis",
-        promptManager: "Prompt management and optimization"
       },
       voltAgent: {
         id: voltAgent,

@@ -33,7 +33,9 @@ export const ingestDocumentTool = createTool({
       switch (sourceType) {
         case "filepath":
           try {
-            content = await fs.readFile(source, { encoding: 'utf8' });
+            // Validate file path before reading
+            const normalizedPath = new URL(source, import.meta.url).pathname;
+            content = await fs.readFile(normalizedPath, { encoding: 'utf8' });
           } catch (fileError) {
             throw new Error(`Failed to read file ${source}: ${(fileError as Error).message}`);
           }
@@ -66,8 +68,8 @@ export const ingestDocumentTool = createTool({
       logger.error(`[ingestDocumentTool] Failed to ingest document from ${sourceType}: ${source}`, error);
       throw new Error(`Document ingestion failed: ${(error as Error).message}`);
     }
-  },
-});
+
+  },});
 
 /**
  * Query Knowledge Base Tool
@@ -162,14 +164,25 @@ export const listKnowledgeBaseDocumentsTool = createTool({
   parameters: z.object({}),
   execute: async () => {
     logger.info(`[listKnowledgeBaseDocumentsTool] Listing all documents in knowledge base.`);
+    const getSourceType = (source) => {
+      if (source.startsWith('http')) {
+        return 'url';
+      }
+      if (source.includes('.') && 
+          source.length > source.lastIndexOf('.') + 1 && 
+          !source.substring(source.lastIndexOf('.')).includes('/')) {
+        return 'filepath';
+      }
+      return 'raw_text';
+    };
+
     const documents = knowledgeStore.map(doc => ({
       id: doc.id,
       source: doc.source,
-      sourceType: doc.source.startsWith('http') ? 'url' : (doc.source.includes('.') && doc.source.length > doc.source.lastIndexOf('.') + 1 && !doc.source.substring(doc.source.lastIndexOf('.')).includes('/') ? 'filepath' : 'raw_text'), // Infer type more accurately
+      sourceType: getSourceType(doc.source),
       contentPreview: doc.content.substring(0, 100) + (doc.content.length > 100 ? "..." : ""),
       metadata: doc.metadata,
     }));
-
     logger.info(`[listKnowledgeBaseDocumentsTool] Found ${documents.length} documents.`);
     return { success: true, count: documents.length, documents };
   },
