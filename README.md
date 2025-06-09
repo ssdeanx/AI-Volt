@@ -5,6 +5,7 @@
 [![Google AI](https://img.shields.io/badge/Google%20AI-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
 [![Vercel AI SDK](https://img.shields.io/badge/Vercel%20AI%20SDK-000000?logo=vercel&logoColor=white)](https://sdk.vercel.ai/)
 [![wakatime](https://wakatime.com/badge/user/7a2fb9a0-188b-4568-887f-7645f9249e62.svg)](https://wakatime.com/@7a2fb9a0-188b-4568-887f-7645f9249e62)
+[![VoltAgent](https://img.shields.io/badge/VoltAgent-FF5722?logo=lightning&logoColor=white)](https://volt.ai/)
 
   <h1>⚡ Volt ⚡</h1>
   <p>
