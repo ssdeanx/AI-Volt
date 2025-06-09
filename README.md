@@ -4,9 +4,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Google AI](https://img.shields.io/badge/Google%20AI-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
 [![Vercel AI SDK](https://img.shields.io/badge/Vercel%20AI%20SDK-000000?logo=vercel&logoColor=white)](https://sdk.vercel.ai/)
-<figure><embed src="https://wakatime.com/share/@AcidBomb/8f2b261b-5ccc-4fc9-87bf-f3789212f6a9.svg"></embed></figure>
-<div align="center">
-  <h1>AI-Volt ⚡</h1>
+[![wakatime](https://wakatime.com/badge/user/7a2fb9a0-188b-4568-887f-7645f9249e62.svg)](https://wakatime.com/@7a2fb9a0-188b-4568-887f-7645f9249e62)
+
+  <h1>⚡ Volt ⚡</h1>
   <p>
     **Next-generation multi-agent AI orchestration platform** that revolutionizes task automation through intelligent delegation and specialized worker coordination.
   </p>
