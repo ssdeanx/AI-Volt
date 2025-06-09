@@ -68,7 +68,7 @@ Edit your `.env` file:
 ```env
 GOOGLE_GENERATIVE_AI_API_KEY=your_actual_api_key_here
 NODE_ENV=development
-PORT=3000
+PORT=4131
 LOG_LEVEL=info
 ```
 
@@ -113,12 +113,13 @@ graph TB
 src/
 ├── agents/           # Multi-agent system components
 │   ├── supervisorAgent.ts    # Main coordination logic
-│   └── index.ts             # Agent registry
+│   └── supervisorRetriever.ts      # Supervisor retriever for task routing
 ├── tools/            # Specialized tool implementations
 │   ├── calculator.ts        # Mathematical operations
 │   ├── datetime.ts         # Temporal intelligence
 │   ├── webBrowser.ts       # Web automation
 │   └── index.ts           # Tool registry
+├── prompts/          # Prompt templates for agents
 ├── config/           # Environment & logging setup
 └── index.ts          # Application entry point
 ```
@@ -233,7 +234,7 @@ export const createSpecializedAgent = () => {
   return new Agent({
     name: "Specialized-Worker",
     instructions: "Detailed agent behavior instructions...",
-    model: google("gemini-2.0-flash"),
+    model: google("gemini-2.5-flash-preview"),
     tools: [customTool, ...otherTools],
     memory: new LibSQLStorage({
       url: "file:./.voltagent/specialized-memory.db",
@@ -241,6 +242,7 @@ export const createSpecializedAgent = () => {
     }),
     hooks: createSpecializedHooks()
   });
+};
 };
 ```
 
@@ -259,7 +261,7 @@ export const createSpecializedAgent = () => {
 |----------|-------------|---------|----------|
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI API key for Gemini models | - | ✅ |
 | `NODE_ENV` | Environment mode | `development` | ❌ |
-| `PORT` | Server port | `3000` | ❌ |
+| `PORT` | Server port | `3141` | ❌ |
 | `LOG_LEVEL` | Logging verbosity | `info` | ❌ |
 
 ## 🤝 Contributing
@@ -338,8 +340,18 @@ This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE
 </div>
 
 ```mermaid
+%%title AI Volt Architecture Diagram
+%%description This diagram illustrates the architecture of AI Volt, showing the interaction between the user, application components, and external systems.
+%%version 1.0
+%%author ssd
+%%date 2025-06-09
+%%style
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#4CAF50', 'edgeLabelBackground':'#ffffff', 'tertiaryColor': '#f0f0f0'}}}%%
+%%{flowchart: {curve: 'linear'}}%%
+%%{flowchart: {nodeSpacing: 50, rankSpacing: 50}}%%
+%%{flowchart: {defaultStyle: {fill: '#f9f9f9', stroke: '#333', 'stroke-width': 1.5}}}%%
 graph TD
-
+    %% Define the main components of the AI Volt architecture
     7402["User<br>External Actor"]
     subgraph 7390["External Systems"]
         7397["AI APIs<br>Google, Vercel, etc."]
@@ -363,6 +375,21 @@ graph TD
         7394["Tooling System<br>TypeScript"] -->|uses| 7396["Configuration &amp; Logging<br>TypeScript"]
     end
     %% Edges at this level (grouped by source)
+    %% Connect the user to the application entry point
+    7392["Application Entry<br>TypeScript"] -->|receives input from| 7402["User<br>External Actor"]
+    %% Connect the application entry point to the external systems
+    7392["Application Entry<br>TypeScript"] -->|invokes| 7397["AI APIs<br>Google, Vercel, etc."]
+    7392["Application Entry<br>TypeScript"] -->|interacts with| 7398["Code Repository APIs<br>GitHub, etc."]
+    7392["Application Entry<br>TypeScript"] -->|stores data in| 7399["Data Stores<br>LibSQL, etc."]
+    7392["Application Entry<br>TypeScript"] -->|manages containers via| 7400["Containerization APIs<br>Docker, etc."]
+    7392["Application Entry<br>TypeScript"] -->|automates web tasks with| 7401["Web Browser Interaction<br>Playwright/Chromium"]
+    %% Connect the agent core to the external systems
+    7393["Agent Core<br>TypeScript"] -->|calls| 7397["AI APIs<br>Google, Vercel, etc."]
+    7393["Agent Core<br>TypeScript"] -->|uses memory via| 7399["Data Stores<br>LibSQL, etc."]
+    7394["Tooling System<br>TypeScript"] -->|interacts with| 7398["Code Repository APIs<br>GitHub, etc."]
+    7394["Tooling System<br>TypeScript"] -->|manages| 7400["Containerization APIs<br>Docker, etc."]
+    7394["Tooling System<br>TypeScript"] -->|automates| 7401["Web Browser Interaction<br>Playwright/Chromium"]
+    %% Connect the user to the application entry point
     7402["User<br>External Actor"] -->|invokes| 7392["Application Entry<br>TypeScript"]
     7393["Agent Core<br>TypeScript"] -->|calls| 7397["AI APIs<br>Google, Vercel, etc."]
     7393["Agent Core<br>TypeScript"] -->|uses memory via| 7399["Data Stores<br>LibSQL, etc."]
