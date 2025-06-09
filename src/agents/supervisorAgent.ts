@@ -125,16 +125,17 @@ const CONTEXT_KEYS = {
   
   // Worker context
   TASK_ID: Symbol("taskId"),
-  SESSION_ID_WORKER: Symbol("sessionId"),
+  SESSION_ID_WORKER: Symbol("sessionId"), // For worker's own session/task
   AGENT_TYPE: Symbol("agentType"),
   START_TIME: Symbol("startTime"),
   
-  // Coordination context
-  PARENT_SESSION_ID: Symbol("parentSessionId"),
+  // Coordination context (for worker to know its parent)
+  PARENT_SESSION_ID: Symbol("parentSessionId"), // Supervisor's session ID
+  PARENT_WORKFLOW_ID: Symbol("parentWorkflowId"), // Supervisor's workflow ID
   DELEGATION_CHAIN: Symbol("delegationChain"),
   COORDINATOR_AGENT: Symbol("coordinatorAgent"),
-  RETRIEVAL_COUNT: Symbol("retrievalCount"),
-  RETRIEVAL_HISTORY: Symbol("retrievalHistory"),
+  RETRIEVAL_COUNT: Symbol("retrievalCount"), // Supervisor's retrieval count
+  RETRIEVAL_HISTORY: Symbol("retrievalHistory"), // Supervisor's retrieval history
 } as const;
 
 const validateContextKey = (key: symbol, value: unknown): boolean => {
@@ -475,7 +476,7 @@ const thinkOnlyToolkit: Toolkit = createReasoningTools({
   think: true,
   addFewShot: false,
   analyze: true,
-  addInstructions: false,
+  addInstructions: true,
 });
 
 /**
@@ -530,8 +531,8 @@ export const createSupervisorAgent = async () => {
       providerOptions: {
         google: {
           thinkingConfig: {
-            thinkingBudget: 512,
-            includeThoughts: true,
+            thinkingBudget: 0,
+            includeThoughts: false,
           },
           responseModalities: ["TEXT", "IMAGE"],
         } satisfies GoogleGenerativeAIProviderOptions,
@@ -1122,7 +1123,7 @@ function logSessionSummary({ agent, output, error, context }: OnEndHookArgs) {
   const retrievalCount = context.userContext.get(CONTEXT_KEYS.RETRIEVAL_COUNT);
   
   if (error) {
-    logger.error(`[${agent.name}] AI-Volt coordination session failed`, {
+    logger.error(`[${agent.name}] Coordination session failed`, {
       sessionId,
       delegationId,
       workflowId,
@@ -1132,7 +1133,7 @@ function logSessionSummary({ agent, output, error, context }: OnEndHookArgs) {
       error: error instanceof Error ? error.message : String(error),
     });
   } else {
-    logger.info(`[${agent.name}] AI-Volt coordination session completed`, {
+    logger.info(`[${agent.name}] Coordination session completed`, {
       sessionId,
       delegationId,
       workflowId,
