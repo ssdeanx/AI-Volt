@@ -4,8 +4,13 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Google AI](https://img.shields.io/badge/Google%20AI-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
 [![Vercel AI SDK](https://img.shields.io/badge/Vercel%20AI%20SDK-000000?logo=vercel&logoColor=white)](https://sdk.vercel.ai/)
-
-> **Next-generation multi-agent AI orchestration platform** that revolutionizes task automation through intelligent delegation and specialized worker coordination.
+<figure><embed src="https://wakatime.com/share/@AcidBomb/8f2b261b-5ccc-4fc9-87bf-f3789212f6a9.svg"></embed></figure>
+<div align="center">
+  <h1>AI-Volt ⚡</h1>
+  <p>
+    **Next-generation multi-agent AI orchestration platform** that revolutionizes task automation through intelligent delegation and specialized worker coordination.
+  </p>
+</div>
 
 ## ✨ What Makes AI-Volt Special
 
@@ -330,3 +335,39 @@ This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE
 [⭐ Star us on GitHub](https://github.com/ai-volt/ai-volt) • [🐦 Follow on Twitter](https://twitter.com/ai_volt) • [📧 Subscribe to Newsletter](https://ai-volt.dev/newsletter)
 
 </div>
+
+```mermaid
+graph TD
+
+    7402["User<br>External Actor"]
+    subgraph 7390["External Systems"]
+        7397["AI APIs<br>Google, Vercel, etc."]
+        7398["Code Repository APIs<br>GitHub, etc."]
+        7399["Data Stores<br>LibSQL, etc."]
+        7400["Containerization APIs<br>Docker, etc."]
+        7401["Web Browser Interaction<br>Playwright/Chromium"]
+    end
+    subgraph 7391["AI Volt Application<br>Node.js / TypeScript"]
+        7392["Application Entry<br>TypeScript"]
+        7393["Agent Core<br>TypeScript"]
+        7394["Tooling System<br>TypeScript"]
+        7395["Prompt Management<br>TypeScript"]
+        7396["Configuration &amp; Logging<br>TypeScript"]
+        %% Edges at this level (grouped by source)
+        7392["Application Entry<br>TypeScript"] -->|initializes| 7393["Agent Core<br>TypeScript"]
+        7392["Application Entry<br>TypeScript"] -->|loads| 7396["Configuration &amp; Logging<br>TypeScript"]
+        7393["Agent Core<br>TypeScript"] -->|uses| 7394["Tooling System<br>TypeScript"]
+        7393["Agent Core<br>TypeScript"] -->|loads prompts from| 7395["Prompt Management<br>TypeScript"]
+        7393["Agent Core<br>TypeScript"] -->|uses| 7396["Configuration &amp; Logging<br>TypeScript"]
+        7394["Tooling System<br>TypeScript"] -->|uses| 7396["Configuration &amp; Logging<br>TypeScript"]
+    end
+    %% Edges at this level (grouped by source)
+    7402["User<br>External Actor"] -->|invokes| 7392["Application Entry<br>TypeScript"]
+    7393["Agent Core<br>TypeScript"] -->|calls| 7397["AI APIs<br>Google, Vercel, etc."]
+    7393["Agent Core<br>TypeScript"] -->|uses memory via| 7399["Data Stores<br>LibSQL, etc."]
+    7394["Tooling System<br>TypeScript"] -->|interacts with| 7398["Code Repository APIs<br>GitHub, etc."]
+    7394["Tooling System<br>TypeScript"] -->|manages| 7400["Containerization APIs<br>Docker, etc."]
+    7394["Tooling System<br>TypeScript"] -->|automates| 7401["Web Browser Interaction<br>Playwright/Chromium"]
+```
+
+---
