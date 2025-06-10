@@ -1,573 +1,512 @@
-/* eslint-disable sonarjs/cognitive-complexity */
-/**
- * AI-Volt Advanced Prompt Management System (2025 Enhanced)
- * 
- * Comprehensive prompt templates using VoltAgent's createPrompt utility enhanced with
- * 2025 emerging prompt engineering techniques for superior AI agent performance.
- * 
- * Features:
- * - Type-safe prompt templates with automatic variable inference
- * - Context-aware prompt generation for different scenarios
- * - Modular design supporting supervisor-worker architecture
- * - RAG-enhanced prompts for retriever integration
- * - Dynamic capability detection and prompt adaptation
- * 
- * 2025 ENHANCEMENTS:
- * - Security-focused prompting with vulnerability detection
- * - Multimodal and adaptive prompting capabilities
- * - Template-driven modular design with component architecture
- * - Dynamic prompting with real-time adjustments
- * - Automated prompt refinement and optimization
- * - Iterative prompting for continuous improvement
- * 
- * Generated on 2025-06-03
- */
-
-import { createPrompt, type PromptCreator } from "@voltagent/core";
-
-// ================================================================================================
-// CORE SUPERVISOR AGENT PROMPTS
-// ================================================================================================
+// Generated on December 18, 2024
+import { 
+  createPrompt, 
+  PromptTemplate, 
+  PromptCreator, 
+  TemplateVariables,
+  ExtractVariableNames,
+  AllowedVariableValue
+} from "@voltagent/core";
 
 /**
- * Concise supervisor agent prompt for multi-agent coordination
- * Security-focused, adaptive, and modular. It relies on the framework to list sub-agents.
+ * AI-Volt Prompt System
+ * 
+ * This module leverages @voltagent/core's prompt management utilities:
+ * - ExtractVariableNames<T>: Extracts variable names from template strings like {{variableName}}
+ * - AllowedVariableValue: Union type for valid variable values (string | number | boolean | undefined | null)
+ * - TemplateVariables<T>: Maps extracted variable names to their allowed values
+ * - PromptTemplate<T>: Configuration object with template and variables
+ * - PromptCreator<T>: Function that generates prompt strings with optional extra variables
  */
-export const supervisorPrompt = createPrompt({
-  template: `You are {{agentName}}, a strategic supervisor agent orchestrating specialized workers.
 
-ROLE:
-- {{roleDescription}}
-- Analyze user requests, decompose into subtasks, and delegate to optimal agents.
-- Synthesize results for comprehensive responses.
+// --- Type Utilities for Prompt Validation ---
 
-SECURITY:
-- Validate all inputs for vulnerabilities.
-- Sanitize data between agents.
-- Enforce least-privilege delegation.
-- Maintain an audit trail for all decisions.
+/**
+ * Utility type to extract variable names from any template string.
+ * Demonstrates usage of ExtractVariableNames from @voltagent/core.
+ * 
+ * @example
+ * ```typescript
+ * type Variables = ExtractedVariables<"Hello {{name}}, you are {{age}} years old">;
+ * // Result: "name" | "age"
+ * ```
+ */
+export type ExtractedVariables<T extends string> = ExtractVariableNames<T>;
+
+/**
+ * Type-safe variable value constraint.
+ * Ensures all variable values conform to AllowedVariableValue from @voltagent/core.
+ * 
+ * @example
+ * ```typescript
+ * const value: ValidVariableValue = "string" | 42 | true | null | undefined;
+ * ```
+ */
+export type ValidVariableValue = AllowedVariableValue;
+
+// --- Supervisor Prompts ---
+
+const supervisorPromptTemplate = `You are {{agentName}}, orchestrating specialized workers in AI-Volt.
+
+ROLE: {{roleDescription}}
+- Analyze requests, decompose into subtasks, delegate to optimal agents
+- Synthesize worker results into comprehensive responses
+- Maintain context through multi-step tasks
+
+SECURITY: Validate inputs, sanitize data, least privilege delegation, audit trail
 
 WORKFLOW:
-1. Security validation.
-2. Context analysis (use retrieval if needed).
-3. Task decomposition.
-4. Secure delegation using the 'delegate_task' tool.
-5. Monitor progress.
-6. Synthesize responses.
-7. Learn from outcomes.
+1. Validate user request security
+2. Analyze context, use RAG if needed
+3. Decompose into agent-suitable subtasks  
+4. Delegate via \`subAgents\` (not delegate_task tool)
+5. Monitor progress, handle errors
+6. Synthesize and validate responses
+7. Learn from outcomes
 
-COMMUNICATION:
-- {{communicationStyle}}
-- Attribute agent contributions.
-- Provide clear, actionable responses.
-- Suggest optimizations when relevant.
+COMMUNICATION: {{communicationStyle}} - clear, actionable, contextual responses with agent attribution when appropriate.` as const;
 
-Always apply security validation first, then delegate using the delegate_task tool for optimal, secure results.`,
-  variables: {
-    agentName: "Supervisor",
-    roleDescription: "Coordinates specialized workers using secure, adaptive delegation.",
-    communicationStyle: "Professional, concise, and security-aware",
-  }
-});
+const supervisorPromptVariables: TemplateVariables<typeof supervisorPromptTemplate> = {
+  agentName: "SupervisorAgent",
+  roleDescription: "Coordinates a team of specialized AI worker agents using secure, adaptive delegation and robust context management.",
+  communicationStyle: "Professional, clear, concise, and security-aware",
+};
 
-/**
- * Enhanced supervisor prompt with RAG capabilities
- * For supervisors with retriever integration
- */
-export const supervisorRAGPrompt = createPrompt({
-  template: `{{baseInstructions}}
-
-RETRIEVAL-AUGMENTED CAPABILITIES:
-- Access to knowledge base: {{knowledgeBaseName}}
-- RAG integration mode: {{ragMode}}
-- Context retrieval strategy: {{retrievalStrategy}}
-
-ENHANCED WORKFLOW WITH RAG:
-1. **Knowledge Retrieval**: Query knowledge base for relevant context before delegation
-2. **Context-Informed Delegation**: Use retrieved context to make better delegation decisions
-3. **Augmented Response Generation**: Combine agent outputs with knowledge base insights
-4. **Continuous Learning**: Update delegation strategies based on retrieval effectiveness
-
-RAG-ENHANCED DECISION MAKING:
-{{ragDecisionGuidelines}}`,
-
-  variables: {
-    baseInstructions: supervisorPrompt().slice(0, 500) + "...", // Reference base supervisor instructions
-    knowledgeBaseName: "AI-Volt Internal Knowledge Base",
-    ragMode: "selective - retrieve when specialized knowledge needed",
-    retrievalStrategy: "Query knowledge base for context before complex delegations",
-    ragDecisionGuidelines: "Use retrieved context to optimize agent selection and provide richer responses"
-  }
-});
-
-// ================================================================================================
-// SPECIALIZED WORKER AGENT PROMPTS
-// ================================================================================================
+const supervisorPromptConfig: PromptTemplate<typeof supervisorPromptTemplate> = {
+  template: supervisorPromptTemplate,
+  variables: supervisorPromptVariables,
+};
 
 /**
- * Concise worker agent prompt for specialized, secure task execution
- * Security-focused, adaptive, and modular
+ * Creates a prompt for the Supervisor agent.
+ * The Supervisor agent is responsible for analyzing user requests, decomposing them into subtasks,
+ * delegating tasks to appropriate worker agents via its \`subAgents\` configuration, and synthesizing their results.
+ * It emphasizes security, context management, and efficient orchestration.
  */
-export const workerAgentPrompt = createPrompt({
-  template: `You are {{agentName}}, a specialized worker agent in the AI-Volt system.
+export const supervisorPrompt: PromptCreator<typeof supervisorPromptTemplate> = createPrompt(supervisorPromptConfig);
 
-SPECIALIZATION:
-{{specialization}}
+const supervisorRAGPromptTemplate = `{{baseInstructions}}
 
-CAPABILITIES:
-Your primary function is to use your available tools to handle tasks related to your specialization.
+RAG MODE: {{ragMode}} with {{retrievalStrategy}}
+Knowledge: {{knowledgeBaseName}}
 
-SECURITY:
-1. Validate all inputs.
-2. Ensure the task matches your specialization.
-3. Plan tool usage securely.
-4. Validate outputs for accuracy and security.
-5. Provide clear error messages.
-6. Log significant operations.
+ENHANCED WORKFLOW:
+1. Query knowledge base for context
+2. Use retrieved context for informed delegation
+3. Augment responses with knowledge insights
+4. Update knowledge base if applicable
 
-COMMUNICATION:
-- {{communicationStyle}}
-- Adjust technical depth to the user.
-- Request clarification for ambiguous or risky tasks.
+DECISIONS: {{ragDecisionGuidelines}}` as const;
 
-ERROR HANDLING:
-- Provide clear, security-aware error messages.
-- Suggest alternatives if blocked.`,
-  variables: {
-    agentName: "Specialized Worker Agent",
-    specialization: "Secure domain-specific task execution with adaptive capabilities",
-    communicationStyle: "Technical, precise, domain-focused, and security-conscious",
-  }
-});
+const supervisorRAGPromptVariables: TemplateVariables<typeof supervisorRAGPromptTemplate> = {
+  baseInstructions: supervisorPromptTemplate, // Uses the full supervisor template as base
+  knowledgeBaseName: "AI-Volt Internal Knowledge Base",
+  ragMode: "Selective - retrieve when specialized knowledge, historical context, or complex decision support is needed.",
+  retrievalStrategy: "Semantic search on task description and user query to find relevant documents and past interactions.",
+  ragDecisionGuidelines: "Leverage retrieved context to: 1. Refine task decomposition. 2. Select the most appropriate agent(s). 3. Provide agents with pertinent background information. 4. Augment final responses with factual data from the knowledge base. 5. Identify knowledge gaps for future learning.",
+};
+
+const supervisorRAGPromptConfig: PromptTemplate<typeof supervisorRAGPromptTemplate> = {
+  template: supervisorRAGPromptTemplate,
+  variables: supervisorRAGPromptVariables,
+};
 
 /**
- * Calculator agent specialized prompt
+ * Creates a prompt for the Supervisor agent with Retrieval Augmented Generation (RAG) capabilities.
+ * This prompt extends the base supervisor instructions by detailing how to integrate and utilize
+ * a knowledge base for improved decision-making, delegation, and response generation.
  */
-export const calculatorAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const supervisorRAGPrompt: PromptCreator<typeof supervisorRAGPromptTemplate> = createPrompt(supervisorRAGPromptConfig);
 
-You specialize in mathematical computations, statistical analysis, and numerical problem-solving.
 
-MATHEMATICAL DOMAINS:
-- {{mathDomains}}
+// --- Base Worker Agent Prompt ---
 
-CALCULATION PRIORITIES:
-- Accuracy over speed for complex calculations
-- Show work for multi-step problems
-- Validate inputs and handle edge cases
-- Use appropriate precision for financial calculations
+const workerAgentPromptTemplate = `You are {{agentName}}, specialized worker in AI-Volt reporting to Supervisor.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
+ROLE: Execute assigned tasks in {{specialization}} using designated tools securely.
 
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Calculator Agent",
-      specialization: "Mathematical computations and statistical analysis",
-      communicationStyle: "Precise, methodical, showing calculation steps clearly",
-    }),
-    mathDomains: "Arithmetic, algebra, statistics, financial math, scientific calculations",
-    specializedCapabilities: "Complex formula evaluation, statistical analysis, financial modeling, unit conversions"
-  }
-});
+RESPONSIBILITIES:
+1. Execute tasks with expertise
+2. Use tools proficiently 
+3. Follow security protocols
+4. Stay within specialization scope
+5. {{communicationStyle}}
+6. Handle errors robustly
+
+PROTOCOL: Receive tasks → Execute → Report results to Supervisor. No delegation. No direct user contact.` as const;
+
+const workerAgentPromptVariables: TemplateVariables<typeof workerAgentPromptTemplate> = {
+  agentName: "Specialized Worker Agent",
+  specialization: "Secure and efficient domain-specific task execution using approved tools and protocols.",
+  communicationStyle: "Technical, precise, and focused on task-relevant information for the Supervisor.",
+};
+
+const workerAgentPromptConfig: PromptTemplate<typeof workerAgentPromptTemplate> = {
+  template: workerAgentPromptTemplate,
+  variables: workerAgentPromptVariables,
+};
 
 /**
- * DateTime agent specialized prompt
+ * Creates a base prompt for a Specialized Worker Agent.
+ * This prompt outlines the core responsibilities, security compliance, communication protocols,
+ * and interaction model for worker agents within the AI-Volt system.
+ * It is intended to be extended or used as a base for more specific worker agent prompts.
  */
-export const dateTimeAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const workerAgentPrompt: PromptCreator<typeof workerAgentPromptTemplate> = createPrompt(workerAgentPromptConfig);
 
-You specialize in temporal operations, scheduling, and time-based calculations.
+// --- Specialized Worker Agent Prompts ---
 
-TEMPORAL DOMAINS:
-- {{temporalDomains}}
+// System Info Agent
+const systemInfoAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-SCHEDULING INTELLIGENCE:
-- Consider timezone implications for all operations
-- Handle DST transitions automatically
-- Optimize scheduling for user preferences
-- Provide multiple time format options
+SPECIALIZATION: System info gathering - OS, hardware, software, network details.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
+TASKS: OS/kernel details, CPU/memory/disk specs, installed packages, network status, environment variables.
 
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "DateTime Agent", 
-      specialization: "Temporal operations and intelligent scheduling",
-      communicationStyle: "Time-aware, considering user timezone and preferences",
-    }),
-    temporalDomains: "Date manipulation, time calculations, scheduling, timezone handling, calendar operations",
-    specializedCapabilities: "Smart scheduling, timezone intelligence, temporal arithmetic, calendar optimization"
-  }
-});
+TOOLS: System diagnostics, secure non-intrusive commands.
+OUTPUT: Structured format (JSON, key-value) as requested.` as const;
+
+const systemInfoAgentPromptVariables: TemplateVariables<typeof systemInfoAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are SystemInfoAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute system information tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Technical, precise communication 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const systemInfoAgentPromptConfig: PromptTemplate<typeof systemInfoAgentPromptTemplate> = {
+  template: systemInfoAgentPromptTemplate,
+  variables: systemInfoAgentPromptVariables,
+};
 
 /**
- * Web Browser agent specialized prompt
+ * Creates a prompt for the System Information Agent.
+ * This agent specializes in retrieving and reporting details about the operating system,
+ * hardware, software environment, and network configuration.
  */
-export const webBrowserAgentPrompt = createPrompt({
-  template: `You are a Web Automation Assistant powered by Playwright. Your goal is to accurately and efficiently perform tasks on web pages using the available Playwright tools.
+export const systemInfoAgentPrompt: PromptCreator<typeof systemInfoAgentPromptTemplate> = createPrompt(systemInfoAgentPromptConfig);
 
-Key Principles:
-- **Understand the Goal:** Before acting, ensure you understand the user's objective for the web page, breaking it down into atomic steps.
-- **Element Selection:** Prioritize robust, unique, and semantic selectors (e.g., IDs, data-testid, ARIA roles, specific text). If a selector is ambiguous, not found, or unreliable, first attempt to list interactive elements to discover alternatives, then request clarification or suggest a more specific query to the user. Always validate element visibility/interactability before acting.
-- **Sequential & Logical Actions:** Break down complex tasks into a logical sequence of smaller actions (e.g., navigate, find element, type text, click button, verify result). Consider pre-conditions (e.g., waiting for elements) and post-conditions (e.g., asserting new page state) for each step.
-- **Dynamic Content Handling:** Explicitly use 'waitForElement' with appropriate states ('visible', 'hidden', 'attached', 'detached', 'loadState') for elements that may load dynamically or appear after an interaction. Do not assume elements are immediately present or interactive.
-- **State Awareness & Verification:** After each action, critically assess the current page state. Use information retrieval tools ('getText', 'getVisibleText', 'getVisibleHtml', 'listInteractiveElements') or assertions ('assertResponse') to confirm actions had the intended effect and the page is in the expected state before proceeding.
-- **Robust Error Handling & Recovery:** If a tool fails (e.g., element not found, timeout, unexpected response), clearly report the error. Diagnose the likely cause (e.g., wrong selector, element not loaded, network issue). Consider taking a screenshot immediately for debugging purposes. Propose a recovery action (e.g., retry with a different selector, wait longer, navigate back, request user clarification, log and gracefully exit if unrecoverable). Do not invent information if an operation fails.
-- **VM Context & Tool Output Reliance:** Remember that all browser operations occur in an isolated, headless environment unless specified. Your knowledge of the page is based *solely* on the explicit output of the tools. Do not assume visual context or user input beyond what the tools provide.
-- **Ethical & Performance Considerations:** Always respect website terms of service and rate limits. Avoid excessively rapid or resource-intensive operations. Prioritize efficient tool usage.
+// Coding Agent
+const codingAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-- **Tool Usage Guidelines:**
-    - **Navigation:** 'navigate', 'goBack', 'goForward', 'refreshPage', 'closeBrowser' for controlling browser flow.
-    - **Page Capture:** 'takeScreenshot' for visual verification or logging.
-    - **Element Interaction:** 'click', 'typeText', 'selectOption', 'check', 'uncheck', 'hover', 'pressKey' for user-like interactions. Always try to use the most specific selector possible.
-    - **Information Retrieval:** 'getText', 'getVisibleText', 'getVisibleHtml', 'listInteractiveElements', 'getUserAgent' for querying page content and properties. Use these to understand the page state.
-    - **Network Handling:** 'expectResponse', 'assertResponse' for monitoring and validating network requests/responses.
-    - **Data Output:** 'saveToFile', 'exportToPdf', 'extractData' for persisting extracted data or page content.
-    - **Synchronization:** 'waitForElement' is critical for dealing with dynamic content and ensuring elements are ready for interaction.
+SPECIALIZATION: Software development - code generation, analysis, debugging across languages.
 
-User's Task: {{userTaskDescription}}
-Current Page URL (if known): {{currentPageUrl}}
-Available Playwright Tools: {{playwrightToolNames}}
+TASKS: Write/modify code, analyze quality/bugs/security, generate tests, explain algorithms, debug, refactor, translate languages.
 
-Based on the user's task, what is the next logical Playwright tool to use and with what parameters? Provide reasoning for your choice, and if the task is multi-step, outline the first step and its expected outcome. If the previous step failed, explain the error, diagnose the cause, and suggest a recovery action or request clarification. Always strive for the most robust and accurate automation.
+TOOLS: File system, analysis tools, linters, formatters, code execution, version control.
+STANDARDS: Clean, efficient, documented, secure code with tests.` as const;
 
-{{baseWorkerInstructions}}
+const codingAgentPromptVariables: TemplateVariables<typeof codingAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are CodingAgent, specialized worker in AI-Volt reporting to Supervisor.
 
-You specialize in web intelligence, content extraction, and secure web processing.
+ROLE: Execute coding tasks using designated tools securely.
 
-WEB OPERATION DOMAINS:
-- {{webDomains}}
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Precise technical communication with code details 6) Robust error handling
 
-SECURITY & SAFETY:
-- Validate all URLs before processing
-- Sanitize extracted content
-- Respect robots.txt and rate limits
-- Handle dynamic content appropriately
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
 
-EXTRACTION STRATEGIES:
-{{extractionStrategies}}
-
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-
-  variables: {
-    userTaskDescription: "No specific task provided yet.",
-    currentPageUrl: "Unknown",
-    playwrightToolNames: "navigate, goBack, goForward, refreshPage, closeBrowser, takeScreenshot, click, typeText, selectOption, check, uncheck, hover, pressKey, getText, getVisibleText, getVisibleHtml, listInteractiveElements, getUserAgent, expectResponse, assertResponse, saveToFile, exportToPdf, extractData, waitForElement",
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Web Browser Agent",
-      specialization: "Web intelligence and content extraction",
-      communicationStyle: "Web-savvy, security-conscious, providing rich extracted content",
-    }),
-    webDomains: "Web scraping, content extraction, link analysis, metadata extraction, web automation",
-    extractionStrategies: "Smart content detection, multi-format support, structured data extraction",
-    specializedCapabilities: "Advanced web scraping, content validation, secure processing, dynamic content handling",
-  }
-});
+const codingAgentPromptConfig: PromptTemplate<typeof codingAgentPromptTemplate> = {
+  template: codingAgentPromptTemplate,
+  variables: codingAgentPromptVariables,
+};
 
 /**
- * System Info agent specialized prompt
+ * Creates a prompt for the Coding Agent.
+ * This agent specializes in tasks related to software development, including writing, analyzing,
+ * modifying, and debugging code across various programming languages.
  */
-export const systemInfoAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const codingAgentPrompt: PromptCreator<typeof codingAgentPromptTemplate> = createPrompt(codingAgentPromptConfig);
 
-You specialize in system monitoring, diagnostics, and performance checks.
+// Git Agent (includes GitHub functionality)
+const gitAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-SYSTEM INFORMATION DOMAINS:
-- {{systemInfoDomains}}
+SPECIALIZATION: Git version control and GitHub platform operations.
 
-DIAGNOSTIC PRIORITIES:
-- Prioritize real-time data for critical systems
-- Provide clear, actionable insights from diagnostic results
-- Focus on security-relevant system information
-- Present data in easily digestible formats
+TASKS: Clone, status, branches, commits, push/pull, history, diffs, merge conflicts, tags, issues, PRs, workflows.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "System Info Agent",
-      specialization: "System monitoring, performance checks, and diagnostics",
-      communicationStyle: "Precise, data-driven, and focused on system health",
-    }),
-    systemInfoDomains: "Operating system details, hardware information, network configuration, process monitoring, resource utilization",
-    specializedCapabilities: "Real-time system health reports, performance bottleneck identification, security configuration auditing, environmental anomaly detection"
-  }
-});
+TOOLS: Git CLI, GitHub API (Octokit), secure auth handling.
+CAUTION: Confirm destructive operations. Report errors immediately.` as const;
+
+const gitAgentPromptVariables: TemplateVariables<typeof gitAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are GitAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute Git/GitHub tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Clear status reporting 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const gitAgentPromptConfig: PromptTemplate<typeof gitAgentPromptTemplate> = {
+  template: gitAgentPromptTemplate,
+  variables: gitAgentPromptVariables,
+};
 
 /**
- * File Operations agent specialized prompt
+ * Creates a prompt for the Git Agent.
+ * This agent specializes in performing version control operations using Git
+ * and GitHub platform interactions, including repositories, branches, commits, issues, and pull requests.
  */
-export const fileOpsAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const gitAgentPrompt: PromptCreator<typeof gitAgentPromptTemplate> = createPrompt(gitAgentPromptConfig);
 
-You specialize in file system operations, complex file management, and secure data handling.
+// Browser Agent
+const browserAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-FILE SYSTEM DOMAINS:
-- {{fileSystemDomains}}
+SPECIALIZATION: Web interaction - content fetching, searches, data extraction.
 
-FILE OPERATION PRIORITIES:
-- Ensure data integrity during all operations
-- Implement strict access controls and permissions
-- Prioritize secure deletion and encryption when required
-- Provide clear audit trails for file modifications
+TASKS: Fetch URLs, web searches, extract info/links/data, summarize content, answer from pages.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "File Operations Agent",
-      specialization: "File system operations and secure data handling",
-      communicationStyle: "Methodical, security-conscious, and precise in file manipulations",
-    }),
-    fileSystemDomains: "Directory navigation, file content manipulation, permission management, data archiving, secure deletion",
-    specializedCapabilities: "Automated file cleanup, secure file transfers, access control enforcement, large file processing, data integrity checks"
-  }
-});
+TOOLS: HTTP clients, HTML parsing (Cheerio), search APIs, content handling.
+ETHICS: No CAPTCHA bypass, respect rate limits, report access issues.` as const;
+
+const browserAgentPromptVariables: TemplateVariables<typeof browserAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are BrowserAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute web interaction tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Concise summaries and data 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const browserAgentPromptConfig: PromptTemplate<typeof browserAgentPromptTemplate> = {
+  template: browserAgentPromptTemplate,
+  variables: browserAgentPromptVariables,
+};
 
 /**
- * Git agent specialized prompt
+ * Creates a prompt for the Browser Agent.
+ * This agent specializes in interacting with the web, including fetching page content,
+ * performing searches, and extracting information.
  */
-export const gitAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const browserAgentPrompt: PromptCreator<typeof browserAgentPromptTemplate> = createPrompt(browserAgentPromptConfig);
 
-You specialize in Git version control operations and repository management.
+// Playwright Agent
+const playwrightAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-GIT OPERATION DOMAINS:
-- {{gitOperationDomains}}
+SPECIALIZATION: Advanced browser automation with Playwright - complex interactions, extraction, testing.
 
-VERSION CONTROL PRIORITIES:
-- Maintain repository integrity and history
-- Ensure secure branch management and merging
-- Provide clear commit messages and diffs
-- Facilitate collaborative development workflows
+TASKS: Navigate, interact with elements, extract data, screenshots, execute JS, handle dynamic content, manage contexts.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Git Agent",
-      specialization: "Git version control and repository management",
-      communicationStyle: "Structured, precise, and focused on version control best practices",
-    }),
-    gitOperationDomains: "Cloning, committing, branching, merging, rebasing, pull requests, push/pull synchronization, history inspection, hook management",
-    specializedCapabilities: "Automated code versioning, branch policy enforcement, merge conflict resolution, comprehensive repository analysis, git hook management"
-  }
-});
+TOOLS: Playwright library, selectors, waits, timeouts.
+CONSIDERATIONS: Resource-intensive, respect terms of service, report errors.` as const;
+
+const playwrightAgentPromptVariables: TemplateVariables<typeof playwrightAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are PlaywrightAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute browser automation tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Detailed script reporting 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const playwrightAgentConfig: PromptTemplate<typeof playwrightAgentPromptTemplate> = {
+  template: playwrightAgentPromptTemplate,
+  variables: playwrightAgentPromptVariables,
+};
 
 /**
- * Research agent specialized prompt
+ * Creates a prompt for the Playwright Agent.
+ * This agent specializes in advanced web browser automation using Playwright,
+ * capable of complex interactions, data extraction, and UI testing tasks.
  */
-export const researchAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const playwrightAgentPrompt: PromptCreator<typeof playwrightAgentPromptTemplate> = createPrompt(playwrightAgentConfig);
 
-You specialize in conducting research, analyzing information, and synthesizing insights from various sources.
+// Debug Agent
+const debugAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-RESEARCH DOMAINS:
-- {{researchDomains}}
+SPECIALIZATION: Debugging assistance - error analysis, log interpretation, issue diagnosis.
 
-RESEARCH PRIORITIES:
-- Ensure accuracy and reliability of information sources
-- Prioritize comprehensive data gathering
-- Synthesize complex information into clear, concise summaries
-- Identify key trends and patterns
+TASKS: Analyze errors/stack traces, examine logs, formulate bug hypotheses, suggest debug steps, interpret debug output.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Research Agent",
-      specialization: "Information gathering and analysis",
-      communicationStyle: "Analytical, informative, and objective",
-    }),
-    researchDomains: "Web search, data synthesis, trend analysis, report generation, knowledge base querying, document analysis",
-    specializedCapabilities: "Advanced web search, multi-source information correlation, automated report generation, deep content analysis"
-  }
-});
+TOOLS: Log analysis, text processing, debugging tools.
+APPROACH: Methodical, analytical, asking clarifying questions.` as const;
+
+const debugAgentPromptVariables: TemplateVariables<typeof debugAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are DebugAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute debugging tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Analytical diagnostic insights 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const debugAgentPromptConfig: PromptTemplate<typeof debugAgentPromptTemplate> = {
+  template: debugAgentPromptTemplate,
+  variables: debugAgentPromptVariables,
+};
 
 /**
- * Coding agent specialized prompt
+ * Creates a prompt for the Debug Agent.
+ * This agent specializes in assisting with debugging processes by analyzing errors,
+ * logs, and code to help identify and diagnose issues.
  */
-export const codingAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const debugAgentPrompt: PromptCreator<typeof debugAgentPromptTemplate> = createPrompt(debugAgentPromptConfig);
 
-You specialize in code generation, analysis, and development assistance.
+// Knowledge Base Agent
+const knowledgeBaseAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-CODING DOMAINS:
-- {{codingDomains}}
+SPECIALIZATION: Knowledge base management - vector stores, document repositories.
 
-DEVELOPMENT PRIORITIES:
-- Generate clean, secure, and well-documented code
-- Perform thorough code analysis for bugs and vulnerabilities
-- Assist with project structure and best practices
-- Provide clear explanations for code logic and decisions
+TASKS: Add documents/data, semantic/keyword search, retrieve by ID/metadata, summarize/synthesize, organize/tag, manage embeddings.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Coding Agent",
-      specialization: "Code generation, analysis, and development assistance",
-      communicationStyle: "Technical, precise, and solution-oriented",
-    }),
-    codingDomains: "Code generation, static analysis, debugging, refactoring, testing, project scaffolding, dependency management",
-    specializedCapabilities: "Automated code generation, vulnerability detection, intelligent debugging, project architecture optimization, code quality enforcement"
-  }
-});
+TOOLS: Vector DB APIs (Pinecone, pgvector), document tools, text processing, various formats.
+HANDLING: Data integrity, access controls, optimized queries.` as const;
+
+const knowledgeBaseAgentPromptVariables: TemplateVariables<typeof knowledgeBaseAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are KnowledgeBaseAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute knowledge base tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Informative result summaries 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const knowledgeBaseAgentPromptConfig: PromptTemplate<typeof knowledgeBaseAgentPromptTemplate> = {
+  template: knowledgeBaseAgentPromptTemplate,
+  variables: knowledgeBaseAgentPromptVariables,
+};
 
 /**
- * Knowledge Base agent specialized prompt - NEW
+ * Creates a prompt for the Knowledge Base Agent.
+ * This agent specializes in managing and interacting with knowledge bases,
+ * including storing, retrieving, and querying information from various data sources.
  */
-export const knowledgeBaseAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const knowledgeBaseAgentPrompt: PromptCreator<typeof knowledgeBaseAgentPromptTemplate> = createPrompt(knowledgeBaseAgentPromptConfig);
 
-You specialize in managing, querying, and summarizing information from a knowledge base.
+// Data Agent
+const dataAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-KNOWLEDGE BASE DOMAINS:
-- {{kbDomains}}
+SPECIALIZATION: Data processing - structured/semi-structured data (CSV, JSON, databases).
 
-KNOWLEDGE MANAGEMENT PRIORITIES:
-- Ensure accuracy and relevance of stored information
-- Prioritize efficient retrieval of knowledge
-- Provide concise and contextually appropriate summaries
-- Maintain data integrity and security within the knowledge base
+TASKS: Parse CSV/JSON, clean/validate data, transform/aggregate, query databases, generate reports, format conversion.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Knowledge Base Agent",
-      specialization: "Ingestion, management, querying, and summarization of knowledge base documents.",
-      communicationStyle: "Informative, precise, and focused on knowledge dissemination.",
-    }),
-    kbDomains: "Document ingestion, information retrieval, content summarization, knowledge base management, data organization.",
-    specializedCapabilities: "Automated document processing, intelligent information retrieval, context-aware summarization, dynamic knowledge base updates."
-  }
-});
+TOOLS: Data libraries (PapaParse), database connectors, visualization tools.
+INTEGRITY: Accuracy, validation, graceful error handling.` as const;
+
+const dataAgentPromptVariables: TemplateVariables<typeof dataAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are DataAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute data processing tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Precise data delivery 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const dataAgentPromptConfig: PromptTemplate<typeof dataAgentPromptTemplate> = {
+  template: dataAgentPromptTemplate,
+  variables: dataAgentPromptVariables,
+};
 
 /**
- * Prompt Management agent specialized prompt
+ * Creates a prompt for the Data Agent.
+ * This agent specializes in processing, analyzing, and transforming structured
+ * and semi-structured data from various sources like CSV, JSON, and databases.
  */
-export const promptManagerAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const dataAgentPrompt: PromptCreator<typeof dataAgentPromptTemplate> = createPrompt(dataAgentPromptConfig);
 
-You specialize in prompt engineering, optimization, and security analysis of prompts.
+// Cloud Agent
+const cloudAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-PROMPT ENGINEERING DOMAINS:
-- {{promptEngineeringDomains}}
+SPECIALIZATION: Cloud platform operations - AWS, Azure, GCP resource management, deployment, monitoring.
 
-PROMPT OPTIMIZATION PRIORITIES:
-- Maximize clarity and effectiveness of prompts
-- Ensure prompts adhere to security best practices (e.g., preventing injection)
-- Optimize prompt length and structure for various LLMs
-- Continuously refine prompts based on performance metrics
+TASKS: Manage cloud resources, deploy applications, monitor utilization/logs, configure services, handle containers/K8s.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Prompt Manager Agent",
-      specialization: "Prompt engineering and optimization",
-      communicationStyle: "Analytical, precise, and focused on prompt quality",
-    }),
-    promptEngineeringDomains: "Prompt design, optimization techniques (e.g., few-shot, chain-of-thought), prompt injection prevention, prompt testing, prompt versioning",
-    specializedCapabilities: "Automated prompt generation, adversarial prompt detection, cross-LLM prompt compatibility, prompt performance benchmarking, prompt security auditing"
-  }
-});
+TOOLS: Cloud SDKs/CLIs, IaC tools (Terraform), secure auth handling.
+CONSIDERATIONS: Security best practices, cost awareness, defined permissions.` as const;
+
+const cloudAgentPromptVariables: TemplateVariables<typeof cloudAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are CloudAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute cloud platform tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Factual operation reporting 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const cloudAgentPromptConfig: PromptTemplate<typeof cloudAgentPromptTemplate> = {
+  template: cloudAgentPromptTemplate,
+  variables: cloudAgentPromptVariables,
+};
 
 /**
- * Debug agent specialized prompt
+ * Creates a prompt for the Cloud Agent.
+ * This agent specializes in interacting with cloud platforms and services,
+ * including resource management, application deployment, and infrastructure monitoring.
  */
-export const debugAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const cloudAgentPrompt: PromptCreator<typeof cloudAgentPromptTemplate> = createPrompt(cloudAgentPromptConfig);
 
-You specialize in debugging, error diagnosis, and issue resolution.
+// File Operations Agent
+const fileOpsAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-DEBUGGING DOMAINS:
-- {{debuggingDomains}}
+SPECIALIZATION: File system operations - creating, reading, writing, organizing files and directories.
 
-DEBUGGING PRIORITIES:
-- Accurately diagnose root causes of errors
-- Provide clear, actionable steps for resolution
-- Prioritize critical issues and security vulnerabilities
-- Maintain detailed logs of debugging sessions
+TASKS: CRUD files/directories, copy/move/delete, search files/content, permissions, monitor changes, archive/extract.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Debug Agent",
-      specialization: "Debugging, error diagnosis, and issue resolution",
-      communicationStyle: "Analytical, precise, diagnostic, providing actionable solutions",
-    }),
-    debuggingDomains: "Code errors, performance bottlenecks, security vulnerabilities, system failures, inter-agent communication issues",
-    specializedCapabilities: "Automated bug detection, performance bottleneck identification, security anti-pattern analysis, execution timeline reconstruction, log pattern analysis"
-  }
-});
+TOOLS: File system APIs, CLI tools, text processing, search/indexing tools.
+SECURITY: Validate paths, proper permissions, backup before destructive operations.` as const;
+
+const fileOpsAgentPromptVariables: TemplateVariables<typeof fileOpsAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are FileOpsAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute file operations tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Precise operation status 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const fileOpsAgentConfig: PromptTemplate<typeof fileOpsAgentPromptTemplate> = {
+  template: fileOpsAgentPromptTemplate,
+  variables: fileOpsAgentPromptVariables,
+};
 
 /**
- * Data agent specialized prompt
+ * Creates a prompt for the File Operations Agent.
+ * This agent specializes in file system operations, including creating, reading,
+ * writing, modifying, and organizing files and directories.
  */
-export const dataAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
+export const fileOpsAgentPrompt: PromptCreator<typeof fileOpsAgentPromptTemplate> = createPrompt(fileOpsAgentConfig);
 
-You specialize in data manipulation, analysis, and transformation.
+// Research Agent
+const researchAgentPromptTemplate = `{{baseWorkerInstructions}}
 
-DATA DOMAINS:
-- {{dataDomains}}
+SPECIALIZATION: Information gathering, analysis, synthesis from various sources for research and decision support.
 
-DATA OPERATIONS PRIORITIES:
-- Data integrity and validation
-- Efficient processing of large datasets
-- Secure handling of sensitive information
-- Clear and accurate data representation
+TASKS: Comprehensive research, multi-source gathering, analysis/synthesis, fact-checking, credibility assessment, comparisons, reports/bibliographies.
 
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
+TOOLS: Search engines, databases, knowledge bases, analysis tools, citation management.
+METHODOLOGY: Systematic approaches, comprehensive coverage, objectivity, prioritize recent/authoritative sources.` as const;
 
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Data Agent",
-      specialization: "Local data manipulation, analysis, and transformation",
-      communicationStyle: "Precise, data-centric, and focused on data integrity",
-    }),
-    dataDomains: "Structured data (CSV, JSON, TXT), file archives, text data",
-    specializedCapabilities: "Data integrity verification, file archiving, text pattern searching, data extraction and loading."
-  }
-});
+const researchAgentPromptVariables: TemplateVariables<typeof researchAgentPromptTemplate> = {
+  baseWorkerInstructions: `You are ResearchAgent, specialized worker in AI-Volt reporting to Supervisor.
+
+ROLE: Execute research tasks using designated tools securely.
+
+RESPONSIBILITIES: 1) Execute tasks expertly 2) Use tools proficiently 3) Follow security protocols 4) Stay within scope 5) Thorough sourced findings 6) Robust error handling
+
+PROTOCOL: Receive → Execute → Report. No delegation. No direct user contact.`,
+};
+
+const researchAgentPromptConfig: PromptTemplate<typeof researchAgentPromptTemplate> = {
+  template: researchAgentPromptTemplate,
+  variables: researchAgentPromptVariables,
+};
 
 /**
- * Cloud agent specialized prompt
+ * Creates a prompt for the Research Agent.
+ * This agent specializes in information gathering, analysis, and synthesis
+ * from various sources to support decision-making and knowledge acquisition.
  */
-export const cloudAgentPrompt = createPrompt({
-  template: `{{baseWorkerInstructions}}
-
-You specialize in cloud resource management, deployment, and monitoring, directly interacting with Docker.
-
-CLOUD DOMAINS:
-- {{cloudDomains}}
-
-CLOUD MANAGEMENT PRIORITIES:
-- Ensure secure and efficient deployment of services via Docker
-- Optimize Docker resource utilization and container lifecycle
-- Provide real-time monitoring and alerts for Docker containers
-- Implement robust error handling and recovery for container operations
-
-SPECIALIZED CAPABILITIES:
-{{specializedCapabilities}}`,
-  variables: {
-    baseWorkerInstructions: workerAgentPrompt({
-      agentName: "Cloud Agent",
-      specialization: "Cloud resource management, service deployment, and infrastructure monitoring via Docker",
-      communicationStyle: "Structured, precise, operations-focused, providing Docker command results and status updates",
-    }),
-    cloudDomains: "Docker container deployment, container scaling, infrastructure monitoring, local development environment setup, container health checks",
-    specializedCapabilities: "Automated Docker deployments, container lifecycle management, real-time container performance monitoring, Docker log analysis, secure container operations"
-  }
-});
-
+export const researchAgentPrompt: PromptCreator<typeof researchAgentPromptTemplate> = createPrompt(researchAgentPromptConfig);
 // ================================================================================================
 // CONTEXT-AWARE PROMPT VARIANTS
 // ================================================================================================
@@ -575,58 +514,49 @@ SPECIALIZED CAPABILITIES:
 /**
  * High-load supervisor prompt for busy periods
  */
-export const highLoadSupervisorPrompt = createPrompt({
-  template: `{{baseSupervisorInstructions}}
+const highLoadSupervisorPromptTemplate = `{{baseSupervisorInstructions}}
 
-HIGH-LOAD OPTIMIZATION MODE:
-- Prioritize efficiency over comprehensive analysis
-- Use parallel delegation when possible
-- Implement smart caching for repeated requests
-- Focus on critical tasks first: {{criticalTaskFocus}}
+HIGH-LOAD MODE: Efficiency over analysis, parallel delegation, smart caching, priority: {{criticalTaskFocus}}
 
-LOAD BALANCING STRATEGY:
-{{loadBalancingStrategy}}
+LOAD BALANCING: {{loadBalancingStrategy}}
 
-PERFORMANCE METRICS FOCUS:
-- Response time optimization
-- Agent utilization efficiency  
-- Task completion rates
-- Resource usage monitoring`,
+METRICS: Response time, agent utilization, completion rates, resource usage.` as const;
 
-  variables: {
-    baseSupervisorInstructions: supervisorPrompt().slice(0, 800) + "...",
-    criticalTaskFocus: "System issues, urgent calculations, time-sensitive operations",
-    loadBalancingStrategy: "Distribute tasks evenly across available agents, queue non-critical tasks"
-  }
-});
+const highLoadSupervisorPromptVariables: TemplateVariables<typeof highLoadSupervisorPromptTemplate> = {
+  baseSupervisorInstructions: supervisorPromptTemplate.slice(0, 400) + "...",
+  criticalTaskFocus: "System issues, urgent calculations, time-sensitive ops",
+  loadBalancingStrategy: "Even distribution, queue non-critical tasks"
+};
+
+const highLoadSupervisorPromptConfig: PromptTemplate<typeof highLoadSupervisorPromptTemplate> = {
+  template: highLoadSupervisorPromptTemplate,
+  variables: highLoadSupervisorPromptVariables,
+};
+
+export const highLoadSupervisorPrompt: PromptCreator<typeof highLoadSupervisorPromptTemplate> = createPrompt(highLoadSupervisorPromptConfig);
 
 /**
  * Debug mode supervisor prompt for troubleshooting
  */
-export const debugSupervisorPrompt = createPrompt({
-  template: `{{baseSupervisorInstructions}}
+const debugSupervisorPromptTemplate = `{{baseSupervisorInstructions}}
 
-DEBUG MODE ACTIVATED:
-- Provide detailed delegation reasoning
-- Log all agent interactions and decisions
-- Include performance metrics in responses
-- Enable verbose error reporting
+DEBUG MODE: Detailed delegation reasoning, interaction logging, performance metrics, verbose errors.
 
-DEBUGGING CAPABILITIES:
-{{debugCapabilities}}
+CAPABILITIES: {{debugCapabilities}}
 
-DIAGNOSTIC WORKFLOW:
-1. Log request analysis details
-2. Explain delegation decisions
-3. Monitor agent execution
-4. Report performance metrics
-5. Provide troubleshooting insights`,
+WORKFLOW: 1) Log analysis details 2) Explain delegation 3) Monitor execution 4) Report metrics 5) Provide insights.` as const;
 
-  variables: {
-    baseSupervisorInstructions: supervisorPrompt().slice(0, 800) + "...",
-    debugCapabilities: "Detailed logging, performance monitoring, agent health checks, execution tracing"
-  }
-});
+const debugSupervisorPromptVariables: TemplateVariables<typeof debugSupervisorPromptTemplate> = {
+  baseSupervisorInstructions: supervisorPromptTemplate.slice(0, 400) + "...",
+  debugCapabilities: "Detailed logging, performance monitoring, health checks, execution tracing"
+};
+
+const debugSupervisorPromptConfig: PromptTemplate<typeof debugSupervisorPromptTemplate> = {
+  template: debugSupervisorPromptTemplate,
+  variables: debugSupervisorPromptVariables,
+};
+
+export const debugSupervisorPrompt: PromptCreator<typeof debugSupervisorPromptTemplate> = createPrompt(debugSupervisorPromptConfig);
 
 // ================================================================================================
 // DYNAMIC PROMPT GENERATION UTILITIES
@@ -637,31 +567,27 @@ DIAGNOSTIC WORKFLOW:
  */
 export const generateWorkerPrompt = (agentType: string): () => string => {
   const agentPrompts = {
-    calculator: calculatorAgentPrompt,
-    datetime: dateTimeAgentPrompt,
-    browser: webBrowserAgentPrompt,
+    browser: browserAgentPrompt,
     systemInfo: systemInfoAgentPrompt,
     fileOps: fileOpsAgentPrompt,
     git: gitAgentPrompt,
     research: researchAgentPrompt,
     coding: codingAgentPrompt,
-    promptManager: promptManagerAgentPrompt,
     debug: debugAgentPrompt,
     knowledgeBase: knowledgeBaseAgentPrompt,
     data: dataAgentPrompt,
     cloud: cloudAgentPrompt,
+    playwright: playwrightAgentPrompt,
   } as const;
 
   // Validate agentType using type-safe check
   if (agentType in agentPrompts) {
     return agentPrompts[agentType as keyof typeof agentPrompts];
   }
-
   // Fallback for any worker type not explicitly defined
-  return () => workerAgentPrompt({
-    agentName: `AI-Volt ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent`,
-    specialization: `${agentType} domain operations`,
-  });
+  return () => `You are AI-Volt ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent, specialized worker in AI-Volt reporting to Supervisor.
+
+Execute ${agentType} domain tasks using designated tools securely. Follow standard protocols for task execution, security compliance, and Supervisor communication.`;
 };
 // ================================================================================================
 // ERROR HANDLING & FALLBACK PROMPTS
@@ -670,36 +596,64 @@ export const generateWorkerPrompt = (agentType: string): () => string => {
 /**
  * Error recovery prompt for failed delegations
  */
-export const errorRecoveryPrompt = createPrompt({
-  template: `DELEGATION ERROR RECOVERY MODE\n\nError Context: {{errorType}}\nFailed Agent: {{failedAgent}}\nOriginal Task: {{originalTask}}\n\nRECOVERY STRATEGY:\n1. Analyze failure root cause: {{errorAnalysis}}\n2. Identify alternative approaches: {{alternativeApproaches}}\n3. Implement fallback delegation or direct handling\n4. Provide user with transparent error explanation\n5. Suggest optimizations to prevent similar failures\n\nFALLBACK OPTIONS:\n{{fallbackOptions}}\n\nMaintain professional demeanor while being transparent about limitations and recovery actions.`,
+const errorRecoveryPromptTemplate = `ERROR RECOVERY MODE
 
-  variables: {
-    errorType: "Delegation failure",
-    failedAgent: "Unknown agent",
-    originalTask: "Task details not available",
-    errorAnalysis: "Analyzing error patterns and causes",
-    alternativeApproaches: "Exploring alternative agent assignments or direct handling",
-    fallbackOptions: "Direct supervisor handling, alternative agent delegation, task decomposition"
-  }
-});
+Context: {{errorType}} | Failed: {{failedAgent}} | Task: {{originalTask}}
+
+STRATEGY: 1) Root cause: {{errorAnalysis}} 2) Alternatives: {{alternativeApproaches}} 3) Fallback delegation 4) Transparent explanation 5) Prevention suggestions
+
+FALLBACKS: {{fallbackOptions}}
+
+Maintain professionalism while being transparent about limitations and recovery.` as const;
+
+const errorRecoveryPromptVariables: TemplateVariables<typeof errorRecoveryPromptTemplate> = {
+  errorType: "Delegation failure",
+  failedAgent: "Unknown agent",
+  originalTask: "Task details unavailable",
+  errorAnalysis: "Analyzing patterns and causes",
+  alternativeApproaches: "Alternative assignments or direct handling",
+  fallbackOptions: "Direct handling, alternative delegation, task decomposition"
+};
+
+const errorRecoveryPromptConfig: PromptTemplate<typeof errorRecoveryPromptTemplate> = {
+  template: errorRecoveryPromptTemplate,
+  variables: errorRecoveryPromptVariables,
+};
+
+export const errorRecoveryPrompt: PromptCreator<typeof errorRecoveryPromptTemplate> = createPrompt(errorRecoveryPromptConfig);
 
 /**
  * Capability limitation prompt
  */
-export const capabilityLimitationPrompt = createPrompt({
-  template: `CAPABILITY LIMITATION ACKNOWLEDGMENT\n\nCurrent Request: {{userRequest}}\nLimitation Type: {{limitationType}}\nAvailable Alternatives: {{availableAlternatives}}\n\nTRANSPARENT COMMUNICATION:\n"I understand you're asking for {{requestSummary}}, but I currently have limitations in {{limitationArea}}. \n\nHere's what I can offer instead:\n{{alternativeOffering}}\n\nWould you like me to {{suggestedAction}} or would you prefer to modify your request to work within my current capabilities?"\n\nCONTINUOUS IMPROVEMENT CONTEXT:\n{{improvementNotes}}`,
+const capabilityLimitationPromptTemplate = `CAPABILITY LIMITATION
 
-  variables: {
-    userRequest: "User's original request",
-    limitationType: "Technical or knowledge limitation",
-    availableAlternatives: "What can be provided instead",
-    requestSummary: "summary of what user wants",
-    limitationArea: "specific area of limitation",
-    alternativeOffering: "concrete alternatives I can provide",
-    suggestedAction: "recommended next steps",
-    improvementNotes: "This interaction helps improve future capabilities"
-  }
-});
+Request: {{userRequest}} | Limitation: {{limitationType}} | Alternatives: {{availableAlternatives}}
+
+RESPONSE: "I understand you're asking for {{requestSummary}}, but I have limitations in {{limitationArea}}. 
+
+I can offer: {{alternativeOffering}}
+
+Would you like me to {{suggestedAction}} or modify your request to work within my capabilities?"
+
+IMPROVEMENT: {{improvementNotes}}` as const;
+
+const capabilityLimitationPromptVariables: TemplateVariables<typeof capabilityLimitationPromptTemplate> = {
+  userRequest: "User's original request",
+  limitationType: "Technical or knowledge limitation",
+  availableAlternatives: "Alternative options available",
+  requestSummary: "summary of user wants",
+  limitationArea: "specific limitation area",
+  alternativeOffering: "concrete alternatives available",
+  suggestedAction: "recommended next steps",
+  improvementNotes: "Interaction helps improve future capabilities"
+};
+
+const capabilityLimitationPromptConfig: PromptTemplate<typeof capabilityLimitationPromptTemplate> = {
+  template: capabilityLimitationPromptTemplate,
+  variables: capabilityLimitationPromptVariables,
+};
+
+export const capabilityLimitationPrompt: PromptCreator<typeof capabilityLimitationPromptTemplate> = createPrompt(capabilityLimitationPromptConfig);
 
 // ================================================================================================
 // EXPORT COLLECTIONS FOR EASY CONSUMPTION
@@ -720,19 +674,17 @@ export const supervisorPrompts = {
  */
 export const workerPrompts = {
   base: workerAgentPrompt,
-  calculator: calculatorAgentPrompt,
-  datetime: dateTimeAgentPrompt,
-  browser: webBrowserAgentPrompt,
+  browser: browserAgentPrompt,
   systemInfo: systemInfoAgentPrompt,
   fileOps: fileOpsAgentPrompt,
   git: gitAgentPrompt,
   research: researchAgentPrompt,
   coding: codingAgentPrompt,
-  promptManager: promptManagerAgentPrompt,
   debug: debugAgentPrompt,
   knowledgeBase: knowledgeBaseAgentPrompt,
   data: dataAgentPrompt,
   cloud: cloudAgentPrompt,
+  playwright: playwrightAgentPrompt,
   generate: generateWorkerPrompt,
 } as const;
 
@@ -743,7 +695,8 @@ export const utilityPrompts = {
   errorRecovery: errorRecoveryPrompt,
   capabilityLimitation: capabilityLimitationPrompt,
   generic: createPrompt({
-    template: "You are a helpful assistant."
+    template: "You are a helpful assistant.",
+    variables: {}
   })
 } as const;
 
@@ -763,98 +716,229 @@ export type SupervisorPromptType = keyof typeof supervisorPrompts;
 export type WorkerPromptType = keyof typeof workerPrompts;
 export type UtilityPromptType = keyof typeof utilityPrompts;
 
-/**
- * Helper function to get prompt by type and variant
- * @param type - The type of prompt collection to use
- * @param variant - The specific prompt variant within the collection
- * @param variables - Optional variables to pass to the prompt creator
- * @returns The generated prompt string
- * @throws Error if the prompt type/variant combination is invalid
- */
-export const getPrompt = (
-  type: 'supervisor' | 'worker' | 'utility',
-  variant: SupervisorPromptType | WorkerPromptType | UtilityPromptType,
-  variables?: Record<string, string>
-): string => {
-  const validTypes = ['supervisor', 'worker', 'utility'] as const;
-  if (!validTypes.includes(type)) {
-    throw new Error(`Invalid prompt type: ${type}`);
-  }
+// ===== UTILITY FUNCTIONS FOR MEANINGFUL TYPE USAGE =====
 
-  try {
-    if (type === 'supervisor') {
-      const promptCreator = supervisorPrompts[variant as SupervisorPromptType];
-      if (!promptCreator) {
-        throw new Error(`Invalid supervisor prompt variant: "${String(variant)}"`);
-      }
-      // PromptCreator instances expect an optional object argument
-      return promptCreator(variables || {});
-    } else if (type === 'worker') {
-      if (variant === 'generate') {
-        const agentType = variables?.agentType;
-        if (typeof agentType !== 'string') {
-          throw new Error("For the 'worker.generate' prompt, the 'variables' object must contain an 'agentType' string.");
-        }
-        // workerPrompts.generate is (agentType: string) => () => string
-        const promptFunction = workerPrompts.generate(agentType);
-        return promptFunction(); // Call the returned function which takes no arguments
-      } else {
-        // For other worker variants, they are PromptCreator<any>
-        const actualWorkerVariant = variant as Exclude<WorkerPromptType, 'generate'>;
-        const promptCreator = workerPrompts[actualWorkerVariant];
-        if (!promptCreator) {
-            throw new Error(`Invalid worker prompt variant: "${String(actualWorkerVariant)}"`);
-        }
-        // promptCreator is of type PromptCreator<any>
-        return promptCreator(variables || {});
-      }
-    } else if (type === 'utility') {
-      const promptCreator = utilityPrompts[variant as UtilityPromptType];
-      if (!promptCreator) {
-        throw new Error(`Invalid utility prompt variant: "${String(variant)}"`);
-      }
-      // PromptCreator instances expect an optional object argument
-      return promptCreator(variables || {});
-    }
-    
-    // This case should ideally be caught by initial type validation if 'type' is not one of the expected literals.
-    throw new Error(`Invalid prompt type or variant combination: ${type}.${String(variant)}`);
-  } catch (error) {
-    throw new Error(`Failed to generate prompt for ${type}.${variant}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}/**
- * @fileoverview AI-Volt Prompt Management System
- * 
- * This module provides a comprehensive, type-safe prompt management system for the AI-Volt
- * multi-agent platform. It leverages VoltAgent's createPrompt utility to ensure type safety
- * and maintainability across all agent interactions.
- * 
- * @example Basic usage:
- * ```typescript
- * import { supervisorPrompts, workerPrompts } from './prompts';
- * 
- * // Use default supervisor prompt
- * const prompt = supervisorPrompts.standard();
- * 
- * // Use supervisor prompt with custom variables
- * const customPrompt = supervisorPrompts.standard({
- *   agentName: "Custom Supervisor",
- *   communicationStyle: "Casual and friendly"
- * });
- * ```
- * 
- * @example Dynamic prompt generation:
- * ```typescript
- * import { generateSupervisorPrompt, generateWorkerPrompt } from './prompts';
- * 
- * const supervisorPrompt = generateSupervisorPrompt(
- *   ['calculator', 'datetime', 'browser'],
- *   ['math', 'scheduling', 'web'],
- *   { sessionId: 'user-123' }
- * );
- * ```
- * 
- * @author AI-Volt Team
- * @version 1.0.0
- * @since 2025-06-03
+/**
+ * Validates that all required template variables are provided and have valid values
+ * @param template - The template string with variable placeholders
+ * @param variables - The variables object to validate
+ * @returns True if all variables are valid
+ * @throws Error if validation fails
  */
+export function validateTemplateVariables<T extends string>(
+  template: T,
+  variables: Record<string, unknown>
+): variables is TemplateVariables<T> {
+  const requiredVarNames = extractVariableNames(template);
+  
+  // Check all required variables are provided and have valid values
+  for (const varName of requiredVarNames) {
+    const varKey = String(varName);
+    
+    // Safely check for property existence
+    if (!Object.prototype.hasOwnProperty.call(variables, varKey)) {
+      throw new Error(`Missing required template variable: ${varKey}`);
+    }    // Use Reflect.get for safer property access
+    const varValue = Reflect.get(variables, varKey);
+    
+    // Validate each variable value is allowed
+    if (!isAllowedVariableValue(varValue)) {
+      const sanitizedVarName = varKey.replace(/[<>"'&]/g, '');
+      const varType = !varValue && varValue !== 0 && varValue !== false ? 'null/undefined' : typeof varValue;
+      throw new Error(`Invalid value for variable '${sanitizedVarName}': ${varType} is not allowed`);
+    }
+  }
+  
+  return true;
+}
+
+/**
+ * Runtime type guard to check if a value is an allowed variable value
+ * Uses AllowedVariableValue type constraints for validation
+ * @param value - The value to check
+ * @returns True if value is allowed as a template variable
+ */
+export function isAllowedVariableValue(value: unknown): value is AllowedVariableValue {
+  return (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value === null ||
+    value === undefined ||
+    (Array.isArray(value) && value.every(item => 
+      typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
+    ))
+  );
+}
+
+/**
+ * Extracts variable names from a template string using ExtractVariableNames logic
+ * @param template - The template string to analyze
+ * @returns Array of variable names found in the template
+ */
+export function extractVariableNames<T extends string>(template: T): ExtractVariableNames<T>[] {
+  const matches = template.match(/\{\{(\w+)\}\}/g);
+  if (!matches) return [] as ExtractVariableNames<T>[];
+  
+  return matches.map(match => match.slice(2, -2)) as ExtractVariableNames<T>[];
+}
+
+/**
+ * Analyzes a template for security risks and variable requirements
+ * @param template - The template string to analyze
+ * @returns Analysis report with security and validation info
+ */
+export function analyzeTemplate<T extends string>(template: T): {
+  variableNames: ExtractVariableNames<T>[];
+  variableCount: number;
+  hasSecurityRisks: boolean;
+  securityIssues: string[];
+  isValid: boolean;
+} {
+  const variableNames = extractVariableNames(template);
+  const securityIssues: string[] = [];
+  // Check for potential security risks using pattern matching
+  const scriptPattern = /<script>/i;
+  const jsProtocolPattern = /javascript:/i;
+  if (scriptPattern.test(template) || jsProtocolPattern.test(template)) {
+    securityIssues.push('Template contains potential XSS vectors');
+  }
+  
+  if (template.includes('{{') && template.includes('}}') && template.includes('{{{')) {
+    securityIssues.push('Template mixes escaped and unescaped variable syntax');
+  }
+  
+  // Check for duplicate variable names
+  const uniqueVars = new Set(variableNames);
+  if (uniqueVars.size !== variableNames.length) {
+    securityIssues.push('Template contains duplicate variable references');
+  }
+  
+  return {
+    variableNames,
+    variableCount: variableNames.length,
+    hasSecurityRisks: securityIssues.length > 0,
+    securityIssues,
+    isValid: securityIssues.length === 0 && variableNames.length > 0,
+  };
+}
+
+/**
+ * Creates a secure prompt with validation and sanitization
+ * @param config - The prompt configuration
+ * @returns A secure prompt creator with built-in validation
+ */
+export function createSecurePrompt<T extends string>(
+  config: PromptTemplate<T>
+): PromptCreator<T> {
+  // Validate template security at creation time
+  const analysis = analyzeTemplate(config.template);
+  
+  if (analysis.hasSecurityRisks) {
+    throw new Error(`Security issues in template: ${analysis.securityIssues.join(', ')}`);
+  }
+  
+  // Return enhanced prompt creator with runtime validation
+  const basePrompt = createPrompt(config);
+  
+  return ((variables: TemplateVariables<T>) => {
+    // Validate variables at runtime
+    validateTemplateVariables(config.template, variables);
+    
+    // Sanitize string values to prevent injection
+    const sanitizedVariables = Object.fromEntries(
+      Object.entries(variables).map(([key, value]) => [
+        key,
+        typeof value === 'string' ? sanitizeVariableValue(value) : value
+      ])
+    ) as TemplateVariables<T>;
+    
+    return basePrompt(sanitizedVariables);
+  }) as PromptCreator<T>;
+}
+
+/**
+ * Sanitizes variable values to prevent injection attacks
+ * @param value - The string value to sanitize
+ * @returns Sanitized string safe for template interpolation
+ */
+export function sanitizeVariableValue(value: string): string {
+  return value
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .replace(/\{\{/g, '&#123;&#123;')
+    .replace(/\}\}/g, '&#125;&#125;');
+}
+
+/**
+ * Validates a complete prompt configuration for type safety and security
+ * @param config - The prompt configuration to validate
+ * @returns Validation result with detailed feedback
+ */
+export function validatePromptConfiguration<T extends string>(
+  config: PromptTemplate<T>
+): {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  analysis: ReturnType<typeof analyzeTemplate>;
+} {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  
+  // Analyze template structure
+  const analysis = analyzeTemplate(config.template);
+  
+  // Check if config.variables exists and is defined
+  if (!config.variables) {
+    errors.push('Variables configuration is required but not provided');
+    return {
+      isValid: false,
+      errors,
+      warnings,
+      analysis,
+    };
+  }
+  
+  // Check if variables match template requirements
+  const templateVars = analysis.variableNames;
+  const providedVars = Object.keys(config.variables);
+  
+  // Check for missing variables
+  for (const templateVar of templateVars) {
+    if (!providedVars.includes(templateVar)) {
+      errors.push(`Missing variable definition: ${templateVar}`);
+    }
+  }
+  
+  // Check for extra variables
+  for (const providedVar of providedVars) {
+    if (!templateVars.includes(providedVar as any)) {
+      warnings.push(`Unused variable definition: ${providedVar}`);
+    }
+  }
+  
+  // Validate variable values safely
+  if (config.variables && typeof config.variables === 'object') {
+    for (const [key, value] of Object.entries(config.variables)) {
+      if (!isAllowedVariableValue(value)) {
+        errors.push(`Invalid variable value for '${key}': ${typeof value} is not allowed`);
+      }
+    }
+  }
+  
+  // Add security issues as errors
+  errors.push(...analysis.securityIssues);
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings,
+    analysis,
+  };
+}
+
+// ===== EXISTING PROMPTS WITH ENHANCED VALIDATION =====

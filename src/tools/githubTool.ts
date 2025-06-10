@@ -8,7 +8,7 @@ const octokit = new Octokit({
 
 // Tool to fetch repository stars
 export const fetchRepoStarsTool = createTool({
-  name: "repo_stars",
+  name: "github_repo_stars",
   description: "Fetches the number of stars for a GitHub repository",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository"),
@@ -37,7 +37,7 @@ export const fetchRepoStarsTool = createTool({
 
 // Tool to fetch repository contributors
 export const fetchRepoContributorsTool = createTool({
-  name: "repo_contributors",
+  name: "github_repo_contributors",
   description: "Fetches the list of contributors for a GitHub repository",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository"),
@@ -73,7 +73,7 @@ export const fetchRepoContributorsTool = createTool({
 
 // New Tool: Get file content from a GitHub repository
 export const getFileContentTool = createTool({
-  name: "get_github_file_content",
+  name: "github_file_content",
   description: "Retrieves the content of a file from a GitHub repository.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -118,7 +118,7 @@ export const getFileContentTool = createTool({
 
 // New Tool: List repository contents (files and directories)
 export const listRepositoryContentsTool = createTool({
-  name: "list_github_repo_contents",
+  name: "github_repo_contents",
   description: "Lists the contents (files and directories) of a path in a GitHub repository.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -169,7 +169,7 @@ export const listRepositoryContentsTool = createTool({
 // Pull Request Management Tools
 
 export const listPullRequestsTool = createTool({
-  name: "list_github_pull_requests",
+  name: "github_pull_requests",
   description: "Fetches a list of pull requests for a GitHub repository.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -217,7 +217,7 @@ export const listPullRequestsTool = createTool({
 });
 
 export const getPullRequestDetailsTool = createTool({
-  name: "get_github_pull_request_details",
+  name: "github_pull_request_details",
   description: "Retrieves detailed information about a specific pull request.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -265,7 +265,7 @@ export const getPullRequestDetailsTool = createTool({
 });
 
 export const createPullRequestTool = createTool({
-  name: "create_github_pull_request",
+  name: "github_create_pull_request",
   description: "Creates a new pull request in a GitHub repository.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -310,7 +310,7 @@ export const createPullRequestTool = createTool({
 });
 
 export const mergePullRequestTool = createTool({
-  name: "merge_github_pull_request",
+  name: "github_merge_pull_request",
   description: "Merges an open pull request.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -347,7 +347,7 @@ export const mergePullRequestTool = createTool({
 });
 
 export const commentOnPullRequestTool = createTool({
-  name: "comment_on_github_pull_request",
+  name: "github_comment_pull_request",
   description: "Adds a comment to a specific pull request.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -382,7 +382,7 @@ export const commentOnPullRequestTool = createTool({
 });
 
 export const listPullRequestFilesTool = createTool({
-  name: "list_github_pull_request_files",
+  name: "github_pull_request_files",
   description: "Lists the files changed in a specific pull request.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -425,7 +425,7 @@ export const listPullRequestFilesTool = createTool({
 // Repository Management Tools
 
 export const createRepositoryTool = createTool({
-  name: "create_github_repository",
+  name: "github_create_repository",
   description: "Creates a new GitHub repository for the authenticated user or organization.",
   parameters: z.object({
     name: z.string().describe("The name of the repository."),
@@ -465,7 +465,7 @@ export const createRepositoryTool = createTool({
 });
 
 export const deleteRepositoryTool = createTool({
-  name: "delete_github_repository",
+  name: "github_delete_repository",
   description: "Deletes a GitHub repository. USE WITH EXTREME CAUTION!",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -491,7 +491,7 @@ export const deleteRepositoryTool = createTool({
 });
 
 export const listRepositoryHooksTool = createTool({
-  name: "list_github_repository_hooks",
+  name: "github_repository_hooks",
   description: "Lists webhook configurations for a GitHub repository.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -527,7 +527,7 @@ export const listRepositoryHooksTool = createTool({
 });
 
 export const createRepositoryHookTool = createTool({
-  name: "create_github_repository_hook",
+  name: "github_create_repository_hook",
   description: "Creates a new webhook for a GitHub repository.",
   parameters: z.object({
     owner: z.string().describe("The owner of the repository."),
@@ -574,83 +574,3 @@ export const createRepositoryHookTool = createTool({
   },
 });
 
-// User/Organization Information Tools
-
-export const getUserProfileTool = createTool({
-  name: "get_github_user_profile",
-  description: "Fetches details about a GitHub user.",
-  parameters: z.object({
-    username: z.string().describe("The GitHub username to fetch details for."),
-  }),
-  execute: async ({ username }) => {
-    try {
-      const response = await octokit.users.getByUsername({
-        username,
-      });
-      const user = response.data;
-      return {
-        success: true,
-        user_profile: {
-          login: user.login,
-          id: user.id,
-          type: user.type,
-          name: user.name,
-          company: user.company,
-          blog: user.blog,
-          location: user.location,
-          email: user.email,
-          bio: user.bio,
-          public_repos: user.public_repos,
-          followers: user.followers,
-          following: user.following,
-          created_at: user.created_at,
-          updated_at: user.updated_at,
-          html_url: user.html_url,
-        },
-        message: `Profile for user '${username}' fetched successfully.`,
-        details: user,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        user_profile: null,
-        message: `Error fetching profile for user '${username}': ${error instanceof Error ? error.message : String(error)}`,
-      };
-    }
-  },
-});
-
-export const listOrgMembersTool = createTool({
-  name: "list_github_org_members",
-  description: "Lists members of a GitHub organization.",
-  parameters: z.object({
-    org: z.string().describe("The organization name to list members for."),
-    role: z.enum(["all", "admin", "member"]).optional().default("all").describe("Filter members by their role in the organization."),
-  }),
-  execute: async ({ org, role }) => {
-    try {
-      const response = await octokit.orgs.listMembers({
-        org,
-        role,
-      });
-      const members = response.data.map(member => ({
-        login: member.login,
-        id: member.id,
-        type: member.type,
-        html_url: member.html_url,
-      }));
-      return {
-        success: true,
-        members,
-        message: `Found ${members.length} members in organization '${org}' with role '${role}'.`,
-        details: members,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        members: [],
-        message: `Error listing members for organization '${org}': ${error instanceof Error ? error.message : String(error)}`,
-      };
-    }
-  },
-});

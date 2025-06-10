@@ -69,14 +69,14 @@ async function startAIVolt(): Promise<void> {
     // Instead of Object.keys(voltAgent.agents), use the keys we passed in
     const registeredAgentCount = 2 + workerAgentKeysForLog.length; // ai-volt + supervisor + workers
 
-    logger.info("✅ AI-Volt multi-agent system started successfully", {
+    logger.info("✅ Multi-agent system started successfully", {
       agentCount: registeredAgentCount, 
       supervisorAgent: "supervisor",
       workerAgents: workerAgentKeysForLog,
       architecture: "Multi-agent with supervisor/worker pattern"
     });
     
-    logger.info("🤖 AI-Volt agents are ready to assist!");
+    logger.info("🤖 Agents are ready to assist!");
     
     // Log available capabilities  
     logger.info("🔧 Available capabilities:", {
@@ -90,13 +90,16 @@ async function startAIVolt(): Promise<void> {
         role: "Task coordination and delegation"
       },
       workerAgents: {
-        calculator: "Mathematical calculations",
-        datetime: "Date/time operations", 
         systemInfo: "System monitoring",
         fileOps: "File operations",
         git: "Git version control",
         browser: "Web browsing and scraping",
+        knowledgeBase: "Knowledge management",
+        data: "Data processing and analysis",
+        research: "Research and information retrieval",
+        debug: "Debugging and troubleshooting",
         coding: "Code execution and analysis",
+        cloud: "Cloud operations"
       },
       voltAgent: {
         id: voltAgent,

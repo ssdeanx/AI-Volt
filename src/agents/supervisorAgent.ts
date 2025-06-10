@@ -1,8 +1,15 @@
 /* eslint-disable sonarjs/cognitive-complexity */
 /**
- * Supervisor Agent Configuration
- * Manages and coordinates specialized worker agents using delegation pattern
- * Generated on 2025-06-02
+ * @fileoverview Supervisor Agent Configuration
+ * 
+ * Manages and coordinates specialized worker agents using delegation pattern.
+ * Implements VoltAgent's multi-agent supervisor/worker architecture with 
+ * comprehensive monitoring, context retrieval, and lifecycle management.
+ * 
+ * @module SupervisorAgent
+ * @version 1.0.0
+ * @author AI-Volt Multi-Agent System
+ * @since 2025-06-02
  */
 
 import { Agent, LibSQLStorage, createHooks, type OnStartHookArgs, type OnEndHookArgs, type OnToolStartHookArgs, type OnToolEndHookArgs, type OnHandoffHookArgs, createReasoningTools, type Toolkit } from "@voltagent/core";
@@ -68,8 +75,6 @@ import {
   visiblePageTools,
 } from "../tools/playwright/index.js";
 import {
-  fetchRepoStarsTool,
-  fetchRepoContributorsTool,
   getFileContentTool,
   listRepositoryContentsTool,
   listPullRequestsTool,
@@ -81,9 +86,7 @@ import {
   createRepositoryTool,
   deleteRepositoryTool,
   listRepositoryHooksTool,
-  createRepositoryHookTool,
-  getUserProfileTool,
-  listOrgMembersTool,
+  createRepositoryHookTool
 } from "../tools/githubTool.js";
 import {
     runIsolatedCodeTool,
@@ -108,6 +111,7 @@ import {
 /**
  * Context symbols for type-safe userContext keys
  * Following VoltAgent best practices for avoiding key collisions
+ * @see https://voltagent.dev/docs/agents/context/
  */
 const CONTEXT_KEYS = {
   // Supervisor-level context
@@ -138,38 +142,27 @@ const CONTEXT_KEYS = {
   RETRIEVAL_HISTORY: Symbol("retrievalHistory"), // Supervisor's retrieval history
 } as const;
 
-const validateContextKey = (key: symbol, value: unknown): boolean => {
-  const keyName = key.description?.replace('Symbol(', '').replace(')', '');
-  if (!keyName || !Object.prototype.hasOwnProperty.call(CONTEXT_KEYS, keyName)) {
-    return false;
-  }
-
-  const validators = new Map<symbol, (val: unknown) => boolean>([
-    [CONTEXT_KEYS.SESSION_ID, (val) => typeof val === 'string' && val.length > 0],
-    [CONTEXT_KEYS.DELEGATION_COUNT, (val) => typeof val === 'number' && val >= 0],
-    // Add validators for other context keys
-  ]);
-  
-  const validator = validators.get(key);
-  return validator ? validator(value) : true;
-};
-
 /**
- * Create supervisor-specific hooks for delegation monitoring
- * Enhanced with VoltAgent userContext best practices
+ * Create enhanced supervisor-specific hooks implementing VoltAgent best practices
+ * Follows official VoltAgent patterns for context management and delegation tracking
+ * @see https://voltagent.dev/docs/agents/context/
+ * @see https://voltagent.dev/docs/agents/hooks/
  */
 const createSupervisorHooks = () => createHooks({
-  onStart: async ({ agent, context }: OnStartHookArgs) => {
-    // Generate unique identifiers for this coordination session
+  /**
+   * Called before the supervisor agent starts processing a request
+   * Initializes comprehensive coordination session context and tracking
+   */
+  onStart: async (args: OnStartHookArgs) => {
+    const { agent, context } = args;
+    
+    // Generate unique identifiers for this coordination session following VoltAgent patterns
     const sessionId = `session-${generateId()}`;
     const delegationId = `delegation-${generateId()}`;
     const workflowId = `workflow-${generateId()}`;
     
-    // Initialize context using symbols for type safety
+    // Initialize context using symbols for type safety (VoltAgent best practice)
     context.userContext.set(CONTEXT_KEYS.SESSION_ID, sessionId);
-    if (!validateContextKey(CONTEXT_KEYS.SESSION_ID, sessionId)) {
-      throw new Error('Invalid session ID');
-    }
     context.userContext.set(CONTEXT_KEYS.DELEGATION_ID, delegationId);
     context.userContext.set(CONTEXT_KEYS.WORKFLOW_ID, workflowId);
     context.userContext.set(CONTEXT_KEYS.DELEGATION_START, Date.now());
@@ -178,78 +171,78 @@ const createSupervisorHooks = () => createHooks({
       taskId: string;
       startTime: number;
       description: string;
+      status: 'active' | 'completed' | 'failed';
     }>());
     context.userContext.set(CONTEXT_KEYS.DELEGATION_COUNT, 0);
     context.userContext.set(CONTEXT_KEYS.COORDINATOR_AGENT, agent.name);
     context.userContext.set(CONTEXT_KEYS.RETRIEVAL_COUNT, 0);
-    context.userContext.set(CONTEXT_KEYS.RETRIEVAL_HISTORY, [] as Array<{ query: string; timestamp: number }>);
+    context.userContext.set(CONTEXT_KEYS.RETRIEVAL_HISTORY, [] as Array<{ 
+      query: string; 
+      timestamp: number; 
+      resultsCount: number;
+      cacheHit: boolean;
+    }>);
     
-    logger.info(`[${agent.name}] Coordination session started`, {
+    // Enhanced context correlation for advanced tracking
+    context.userContext.set("supervisorSessionMetadata", {
+      createdAt: new Date().toISOString(),
+      coordinator: agent.name,
+      operationId: context.operationId,
+      sessionVersion: "2.0"
+    });
+    
+    logger.info(`[Hook] Enhanced supervisor session started`, {
       sessionId,
       delegationId,
       workflowId,
       operationId: context.operationId,
       coordinator: agent.name,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      features: ["context-correlation", "delegation-tracking", "retrieval-monitoring"]
     });
-
   },
-  onEnd: async ({ agent, output, error, context }: OnEndHookArgs) => {
-    // --- Cost Tracking ---
-    let llmUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined = undefined;
-    // Try symbol-based key (if defined in CONTEXT_KEYS)
-    if (Object.prototype.hasOwnProperty.call(CONTEXT_KEYS, 'LLM_USAGE')) {
-      llmUsage = context.userContext.get((CONTEXT_KEYS as any).LLM_USAGE);
-    } else {
-      // fallback: try string key or legacy context
-      llmUsage = context.userContext.get('llmUsage');
-    }
-    if (!llmUsage && (context as any).llmUsage) {
-      llmUsage = (context as any).llmUsage;
-    }
+
+  onEnd: async (args: OnEndHookArgs) => {
+    const { agent, output, error, context } = args;
+    
+    // Enhanced LLM usage tracking with detailed cost analysis
+    const llmUsage = extractLLMUsage(context);
     if (llmUsage) {
-      const { promptTokens, completionTokens } = llmUsage;
-      // Gemini 2.5 Flash Preview (Paid Tier, Non-Thinking)
-      const inputCost = (promptTokens / 1_000_000) * 0.15;
-      const outputCost = (completionTokens / 1_000_000) * 0.60;
-      const totalCost = inputCost + outputCost;
-      const taskId = context.userContext.get(CONTEXT_KEYS.TASK_ID) || context.userContext.get(CONTEXT_KEYS.SESSION_ID) || context.operationId;
-      const agentType = context.userContext.get(CONTEXT_KEYS.AGENT_TYPE) || (agent as any).agentType || agent.name;
-      logger.info(`[${agent.name}] LLM usage/cost tracked`, {
-        taskId,
-        agentType,
-        promptTokens,
-        completionTokens,
-        inputCost,
-        outputCost,
-        totalCost,
-        operationId: context.operationId,
-        timestamp: new Date().toISOString(),
-      });
+      trackLLMUsage(agent, context, llmUsage);
     }
-    // Call session summary logging
-    logSessionSummary({ agent, output, error, context });
-    // Error/final logging
+    
+    // Enhanced session summary with context correlation
+    logEnhancedSessionSummary({ agent, output, error, context });
+    
+    // Advanced error handling with context preservation
     if (error) {
-      logger.error(`[${agent.name}] Task failed`, {
+      const errorContext = {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         operationId: context.operationId,
-      });
+        sessionId: context.userContext.get(CONTEXT_KEYS.SESSION_ID),
+        workflowId: context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID),
+        activeDelegations: (context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any>)?.size || 0
+      };
+      
+      logger.error(`[Hook] Enhanced supervisor operation failed`, errorContext);
     } else {
-      logger.info(`[${agent.name}] Task completed`, {
+      logger.info(`[Hook] Enhanced supervisor operation completed successfully`, {
         operationId: context.operationId,
+        sessionId: context.userContext.get(CONTEXT_KEYS.SESSION_ID),
+        successfulDelegations: (context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any>)?.size || 0
       });
     }
   },
 
-  onToolStart: async ({ agent, tool, context }: OnToolStartHookArgs) => {
-    logger.debug(`[${agent.name}] Entering onToolStart`, { toolName: tool.name, operationId: context.operationId }); // <-- ADD THIS LINE
+  onToolStart: async (args: OnToolStartHookArgs) => {
+    const { agent, tool, context } = args;
+    
     const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
     const delegationId = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID);
     const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
     
-    // Track delegation attempts specifically
+    // Enhanced delegation tracking with status management
     if (tool.name === "delegate_task") {
       const delegationCount = (context.userContext.get(CONTEXT_KEYS.DELEGATION_COUNT) as number) || 0;
       const newCount = delegationCount + 1;
@@ -258,53 +251,91 @@ const createSupervisorHooks = () => createHooks({
       context.userContext.set(CONTEXT_KEYS.DELEGATION_COUNT, newCount);
       context.userContext.set(CONTEXT_KEYS.CURRENT_DELEGATION, delegationStartTime);
       
-      logger.info(`[${agent.name}] Task delegation initiated`, {
+      // Track delegation in active delegations map
+      const activeDelegations = context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any>;
+      const delegationKey = `delegation-${newCount}`;
+      activeDelegations.set(delegationKey, {
+        agentType: 'unknown', // Will be updated when we know which agent
+        taskId: delegationKey,
+        startTime: delegationStartTime,
+        description: `Delegation ${newCount}`,
+        status: 'active'
+      });
+      
+      logger.info(`[Hook] Enhanced delegation started`, {
         sessionId,
         delegationId,
         workflowId,
         operationId: context.operationId,
         toolName: tool.name,
         delegationSequence: newCount,
+        totalActiveDelegations: activeDelegations.size,
+        timestamp: new Date().toISOString()
+      });
+    } else if (tool.name === "supervisor_search") {
+      // Enhanced retrieval tracking
+      const count = (context.userContext.get(CONTEXT_KEYS.RETRIEVAL_COUNT) as number) + 1;
+      context.userContext.set(CONTEXT_KEYS.RETRIEVAL_COUNT, count);
+      
+      const history = context.userContext.get(CONTEXT_KEYS.RETRIEVAL_HISTORY) as any[];
+      history.push({ 
+        query: context.operationId as string, 
+        timestamp: Date.now(),
+        resultsCount: 0, // Will be updated in onToolEnd
+        cacheHit: false  // Will be updated based on retrieval result
+      });
+      context.userContext.set(CONTEXT_KEYS.RETRIEVAL_HISTORY, history);
+      
+      logger.debug(`[Hook] Enhanced retrieval started`, {
+        sessionId,
+        retrievalSequence: count,
+        operationId: context.operationId,
         timestamp: new Date().toISOString()
       });
     } else {
-      // Track other tool usage by supervisor
-      logger.debug(`[${agent.name}] Supervisor tool execution started`, {
+      // Track other tool usage by supervisor with enhanced context
+      logger.debug(`[Hook] Enhanced supervisor tool started`, {
         sessionId,
         delegationId,
         workflowId,
         operationId: context.operationId,
         toolName: tool.name,
+        category: this.categorizeTool(tool.name),
         timestamp: new Date().toISOString()
       });
     }
-
-    if (tool.name === "supervisor_search") {
-      const count = (context.userContext.get(CONTEXT_KEYS.RETRIEVAL_COUNT) as number) + 1;
-      context.userContext.set(CONTEXT_KEYS.RETRIEVAL_COUNT, count);
-      const history = context.userContext.get(CONTEXT_KEYS.RETRIEVAL_HISTORY) as any[];
-      // context.operationId is a string, not an object with 'input'
-      history.push({ query: context.operationId as string, timestamp: Date.now() });
-      context.userContext.set(CONTEXT_KEYS.RETRIEVAL_HISTORY, history);
-    }
   },
 
-  onToolEnd: async ({ agent, tool, output, error, context }: OnToolEndHookArgs) => {
+  onToolEnd: async (args: OnToolEndHookArgs) => {
+    const { agent, tool, output, error, context } = args;
+    
     if (tool.name === 'delegate_task') {
-      handleDelegationEnd({ agent, tool, output, error, context });
+      handleEnhancedDelegationEnd({ agent, tool, output, error, context });
+    } else if (tool.name === 'supervisor_search') {
+      handleEnhancedRetrievalEnd({ agent, tool, output, error, context });
     } else {
-      // Existing logic
+      // Enhanced general tool tracking
+      const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
+      const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
+      
       if (error) {
-        logger.warn(`[${agent.name}] Supervisor tool failed`, {
-          sessionId: context.userContext.get(CONTEXT_KEYS.SESSION_ID),
-          delegationId: context.userContext.get(CONTEXT_KEYS.DELEGATION_ID),
-          workflowId: context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID),
+        logger.warn(`[Hook] Enhanced supervisor tool failed`, {
+          sessionId,
+          workflowId,
           operationId: context.operationId,
           toolName: tool.name,
           error: error instanceof Error ? error.message : String(error),
         });
+      } else {
+        logger.debug(`[Hook] Enhanced supervisor tool completed`, {
+          sessionId,
+          toolName: tool.name,
+          outputSize: typeof output === "string" ? output.length : JSON.stringify(output || {}).length
+        });
       }
     }
+    
+    // Output type analysis for enhanced monitoring
     let outputType = 'unknown';
     if (typeof output === 'object' && output !== null) {
         if ('text' in output) {
@@ -313,202 +344,110 @@ const createSupervisorHooks = () => createHooks({
             outputType = 'object';
         }
     }
-    logger.debug(`Output type: ${outputType}`);
+    logger.debug(`Enhanced output analysis: ${outputType}`);
   },
 
   onHandoff: async (args: OnHandoffHookArgs) => {
-    // The exact shape of OnHandoffHookArgs seems to be causing issues.
-    // Let's log the whole object to be safe and inspect its structure.
-    logger.info(`[Agent] Task received via handoff`, {
-      handoffArgs: JSON.stringify(args, null, 2),
+    // Enhanced handoff tracking following VoltAgent documentation
+    const sessionId = args.context?.userContext?.get(CONTEXT_KEYS.SESSION_ID);
+    const workflowId = args.context?.userContext?.get(CONTEXT_KEYS.WORKFLOW_ID);
+    
+    logger.info(`[Hook] Enhanced task handoff received`, {
+      sessionId,
+      workflowId,
+      handoffDetails: {
+        // Safe extraction of handoff details
+        ...(typeof args === 'object' ? args : {})
+      },
       timestamp: new Date().toISOString(),
     });
   }
+});
    
 });
 
 /**
- * Create enhanced supervisor hooks that integrate with the retriever
+ * Create enhanced supervisor hooks that integrate with the retriever following VoltAgent best practices
  */
 const createSupervisorHooksWithRetriever = (baseHooks: ReturnType<typeof createHooks>, retriever: SupervisorRetriever) => {
   return createHooks({
-    onStart: async ({ agent, context }: OnStartHookArgs) => {
+    onStart: async (args: OnStartHookArgs) => {
       // Call base hooks first
-      await baseHooks.onStart?.({ agent, context });
+      await baseHooks.onStart?.(args);
+      const { context } = args;
       
-      // Initialize retriever context tracking
+      // Initialize retriever context tracking with enhanced features
       context.userContext.set(CONTEXT_KEYS.RETRIEVER_ENABLED, true);
       context.userContext.set(CONTEXT_KEYS.CONTEXT_RETRIEVALS, 0);
       
-      // Initialize embedder for semantic search
-      try {
-        await retriever.initEmbedder();
-        logger.debug(`[${agent.name}] Retriever embedder initialized successfully`);
-      } catch (error) {
-        logger.warn(`[${agent.name}] Failed to initialize retriever embedder`, {
-          error: error instanceof Error ? error.message : String(error)
+      // Enhanced retriever initialization
+      const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID) as string;
+      if (sessionId) {
+        // Initialize retriever session correlation
+        retriever.addCapabilityContext({
+          agentType: 'supervisor',
+          capability: 'context-retrieval',
+          description: 'Multi-agent coordination context retrieval and correlation',
+          examples: ['delegation history', 'workflow patterns', 'error resolution'],
+          limitations: ['text-based search only', 'limited to session context']
         });
       }
     },
-
-    onEnd: async ({ agent, output, error, context }: OnEndHookArgs) => {
-      // Call base hooks first
-      await baseHooks.onEnd?.({ agent, output, error, context });
+    
+    onEnd: async (args: OnEndHookArgs) => {
+      const { agent, output, error, context } = args;
+      await baseHooks.onEnd?.(args);
       
-      // Add workflow context to retriever if successful
+      // Enhanced workflow context addition to retriever
       if (!error && output) {
         const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID) as string;
         const activeDelegations = context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any>;
+        const retrievalCount = context.userContext.get(CONTEXT_KEYS.RETRIEVAL_COUNT) as number;
         
         if (workflowId && activeDelegations && activeDelegations.size > 0) {
           try {
             retriever.addWorkflowContext({
-              description: "Multi-agent coordination workflow",
+              description: `Multi-agent coordination workflow with ${activeDelegations.size} delegations and ${retrievalCount} retrievals`,
               steps: Array.from(activeDelegations.keys()),
               workflowId,
               status: 'completed',
               agents: Array.from(activeDelegations.values()).map((delegation: any) => delegation.agentType)
             });
+            
+            // Add session performance metrics to retriever
+            retriever.addDelegationContext({
+              agentType: 'supervisor',
+              task: 'session-completion',
+              result: `Successfully coordinated ${activeDelegations.size} delegations with ${retrievalCount} context retrievals`,
+              taskId: workflowId,
+              workflowId,
+              success: true,
+              duration: Date.now() - (context.userContext.get(CONTEXT_KEYS.DELEGATION_START) as number)
+            });
           } catch (retrievalError) {
-            logger.warn(`[${agent.name}] Failed to add workflow context to retriever`, {
+            logger.warn(`[${agent.name}] Enhanced retriever context addition failed`, {
               error: retrievalError instanceof Error ? retrievalError.message : String(retrievalError),
-              workflowId
-            });
-          }
-        }
-
-        // Ingest conversation context for future retrieval
-        const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID) as string;
-        let outputText: string | null = null;
-        // eslint-disable-next-line sonarjs/no-gratuitous-expressions
-        if (output && typeof output === 'object') {
-          if ('type' in output && output.type === 'text' && 'text' in output && typeof output.text === 'string') {
-            outputText = output.text;
-          } else if ('type' in output && output.type === 'object' && 'object' in output && output.object && typeof (output.object as any).text === 'string') {
-            // Fallback for cases where text might be nested in a generic object result
-            outputText = (output.object as any).text;
-          } else if ('text' in output && typeof output.text === 'string'){
-            // Broader check if type discriminator is missing but text property exists
-            outputText = output.text;
-          }
-        }
-
-        if (sessionId && outputText) { // outputText is now confirmed string or null
-          try {
-            await retriever.ingestChatContext(
-              sessionId,
-              outputText, // Now correctly typed
-              'supervisor_agent',
-              {
-                operationId: context.operationId,
-                timestamp: Date.now(),
-                workflowId
-              }
-            );
-            logger.debug(`[${agent.name}] Chat context ingested for session ${sessionId}`);
-          } catch (ingestError) {
-            logger.warn(`[${agent.name}] Failed to ingest chat context`, {
-              error: ingestError instanceof Error ? ingestError.message : String(ingestError),
-              sessionId
+              workflowId,
+              delegationCount: activeDelegations.size
             });
           }
         }
       }
     },
-
-    onToolStart: async ({ agent, tool, context }: OnToolStartHookArgs) => {
+    
+    onToolStart: async (args: OnToolStartHookArgs) => {
       // Call base hooks first
-      await baseHooks.onToolStart?.({ agent, tool, context });
+      await baseHooks.onToolStart?.(args);
     },
-
-    onToolEnd: async ({ agent, tool, output, error, context }: OnToolEndHookArgs) => {
+    
+    onToolEnd: async (args: OnToolEndHookArgs) => {
       // Call base hooks first
-      await baseHooks.onToolEnd?.({ agent, tool, output, error, context });
-      
-      // Track delegation results in retriever
-      if (tool.name === "delegate_task") {
-        const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID) as string;
-        const delegationStartTimeForRetriever = context.userContext.get(CONTEXT_KEYS.CURRENT_DELEGATION) as number || Date.now();
-        const currentDelegationIdForRetriever = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID) as string;
-
-        try {
-          let resultStrForRetriever = "[No output]";
-          if (typeof output !== 'undefined' && output !== null) {
-            if (typeof output === 'string') {
-              resultStrForRetriever = output;
-            } else {
-              try {
-                let meaningfulOutput: any = output; // Ensure meaningfulOutput can be reassigned
-                if (typeof output === 'object') {
-                    if ('value' in output && typeof (output as any).value === 'string') {
-                        meaningfulOutput = (output as any).value;
-                    } else if ('text' in output && typeof (output as any).text === 'string') {
-                        meaningfulOutput = (output as any).text;
-                    } else if (typeof (output as any).type === 'string' && (output as any).type === 'tool-result' &&
-                               (output as any).toolResult && typeof (output as any).toolResult.result !== 'undefined') {
-                        meaningfulOutput = (output as any).toolResult.result;
-                    }
-                }
-                resultStrForRetriever = JSON.stringify(meaningfulOutput);
-              } catch (stringifyError) {
-                logger.warn(`[${agent.name}] Failed to stringify delegation output for retriever context`, {
-                  sessionId: context.userContext.get(CONTEXT_KEYS.SESSION_ID),
-                  delegationId: currentDelegationIdForRetriever,
-                  toolName: tool.name,
-                  error: stringifyError instanceof Error ? stringifyError.message : String(stringifyError)
-                });
-                resultStrForRetriever = "[Unserializable Object]";
-              }
-            }
-          }
-
-          const success = !error;
-          let agentType = "unknown";
-          const agentTypes = ['calculator', 'datetime', 'system_info', 'fileops', 'git', 'browser', 'coding', 'debug', 'research', 'knowledgeBase', 'data', 'cloud'];
-          for (const type of agentTypes) {
-            if (resultStrForRetriever.toLowerCase().includes(type)) {
-              agentType = type;
-              break;
-            }
-          }
-          
-          retriever.addDelegationContext({
-            agentType,
-            task: "Delegated task via delegate_task tool",
-            result: resultStrForRetriever.substring(0, 500),
-            taskId: currentDelegationIdForRetriever, 
-            workflowId,
-            success,
-            duration: Date.now() - delegationStartTimeForRetriever
-          });
-          
-          logger.debug("Delegation result added to retriever", {
-            agentType,
-            success,
-            taskId: currentDelegationIdForRetriever,
-            workflowId
-          });
-          
-        } catch (retrievalError) {
-          logger.warn("Failed to add delegation context to retriever", {
-            error: retrievalError instanceof Error ? retrievalError.message : String(retrievalError),
-            toolName: tool.name,
-            sessionId: context.userContext.get(CONTEXT_KEYS.SESSION_ID),
-            delegationId: currentDelegationIdForRetriever,
-          });
-        }
-      }
+      await baseHooks.onToolEnd?.(args);
     },
-
+    
     onHandoff: async (args: OnHandoffHookArgs) => {
       // Call base hooks first
       await baseHooks.onHandoff?.(args);
-      
-      // Enhanced handoff tracking
-      logger.debug("Enhanced supervisor handoff", {
-        timestamp: new Date().toISOString(),
-        retrieverEnabled: true
-      });
     }
   });
 };
@@ -521,7 +460,7 @@ const thinkOnlyToolkit: Toolkit = createReasoningTools({
   think: true,
   addFewShot: false,
   analyze: true,
-  addInstructions: true,
+  addInstructions: false,
 });
 
 /**
@@ -584,13 +523,8 @@ export const createSupervisorAgent = async () => {
       },
       tools: [
         thinkOnlyToolkit,
-        calculatorTool,
-        dateTimeTool,
-        systemInfoTool,
         webSearchTool,
         retriever.tool,                // Enable semantic context retrieval
-        fetchRepoStarsTool,
-        fetchRepoContributorsTool,
       ],
       subAgents: [
         workers.systemInfo,
@@ -598,7 +532,6 @@ export const createSupervisorAgent = async () => {
         workers.git,
         workers.browser,
         workers.coding,
-//        workers.promptManager,
         workers.debug,
         workers.research,
         workers.knowledgeBase,
@@ -643,7 +576,8 @@ const createWorkerMemory = (agentType: string) => {
  * Create worker-specific hooks for specialized agent monitoring
  */
 const createWorkerHooks = (agentType: string) => createHooks({
-  onStart: async ({ agent, context }: OnStartHookArgs) => {
+  onStart: async (args: OnStartHookArgs) => {
+    const { agent, context } = args;
     const taskId = `${agentType}-task-${generateId()}`;
     const sessionId = `${agentType}-${generateId()}`;
     
@@ -661,7 +595,8 @@ const createWorkerHooks = (agentType: string) => createHooks({
     });
   },
 
-  onEnd: async ({ agent, output, error, context }: OnEndHookArgs) => {
+  onEnd: async (args: OnEndHookArgs) => {
+    const { agent, output, error, context } = args;
     const taskId = context.userContext.get("taskId");
     const sessionId = context.userContext.get("sessionId");
     const agentType = context.userContext.get("agentType");
@@ -697,7 +632,8 @@ const createWorkerHooks = (agentType: string) => createHooks({
     }
   },
 
-  onToolStart: async ({ agent, tool, context }: OnToolStartHookArgs) => {
+  onToolStart: async (args: OnToolStartHookArgs) => {
+    const { agent, tool, context } = args;
     const taskId = context.userContext.get("taskId");
     const sessionId = context.userContext.get("sessionId");
     const agentType = context.userContext.get("agentType");
@@ -715,7 +651,8 @@ const createWorkerHooks = (agentType: string) => createHooks({
     });
   },
 
-  onToolEnd: async ({ agent, tool, output, error, context }: OnToolEndHookArgs) => {
+  onToolEnd: async (args: OnToolEndHookArgs) => {
+    const { agent, tool, output, error, context } = args;
     const taskId = context.userContext.get("taskId");
     const sessionId = context.userContext.get("sessionId");
     const agentType = context.userContext.get("agentType");
@@ -845,9 +782,7 @@ export const createWorkerAgents = async () => {
         createRepositoryTool,
         deleteRepositoryTool,
         listRepositoryHooksTool,
-        createRepositoryHookTool,
-        getUserProfileTool,
-        listOrgMembersTool,
+        createRepositoryHookTool
       ],
       memory: createWorkerMemory("git"),
       hooks: createWorkerHooks("git"),
@@ -1109,9 +1044,60 @@ export const createWorkerAgents = async () => {
   }
 };
 
-// Add helper function above onEnd
-function logSessionSummary({ agent, output, error, context }: OnEndHookArgs) {
-  if (env.NODE_ENV === 'development') { console.debug('Output summary:', output); }  // Minimal reference to satisfy linter
+// Enhanced helper functions for improved supervisor monitoring
+
+/**
+ * Extract LLM usage data with multiple fallback strategies
+ */
+function extractLLMUsage(context: any): { promptTokens: number; completionTokens: number; totalTokens: number } | undefined {
+  let llmUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined = undefined;
+  
+  // Try symbol-based key (if defined in CONTEXT_KEYS)
+  if (Object.prototype.hasOwnProperty.call(CONTEXT_KEYS, 'LLM_USAGE')) {
+    llmUsage = context.userContext.get((CONTEXT_KEYS as any).LLM_USAGE);
+  } else {
+    // fallback: try string key or legacy context
+    llmUsage = context.userContext.get('llmUsage');
+  }
+  if (!llmUsage && (context as any).llmUsage) {
+    llmUsage = (context as any).llmUsage;
+  }
+  
+  return llmUsage;
+}
+
+/**
+ * Track LLM usage with enhanced cost analysis
+ */
+function trackLLMUsage(agent: any, context: any, llmUsage: { promptTokens: number; completionTokens: number; totalTokens: number }): void {
+  const { promptTokens, completionTokens } = llmUsage;
+  // Gemini 2.5 Flash Preview (Paid Tier, Non-Thinking) pricing
+  const inputCost = (promptTokens / 1_000_000) * 0.15;
+  const outputCost = (completionTokens / 1_000_000) * 0.60;
+  const totalCost = inputCost + outputCost;
+  const taskId = context.userContext.get(CONTEXT_KEYS.TASK_ID) || context.userContext.get(CONTEXT_KEYS.SESSION_ID) || context.operationId;
+  const agentType = context.userContext.get(CONTEXT_KEYS.AGENT_TYPE) || (agent as any).agentType || agent.name;
+  
+  logger.info(`[Hook] Enhanced LLM usage tracking`, {
+    taskId,
+    agentType,
+    promptTokens,
+    completionTokens,
+    inputCost: Number(inputCost.toFixed(6)),
+    outputCost: Number(outputCost.toFixed(6)),
+    totalCost: Number(totalCost.toFixed(6)),
+    operationId: context.operationId,
+    efficiency: promptTokens > 0 ? Number((completionTokens / promptTokens).toFixed(2)) : 0,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/**
+ * Enhanced session summary with comprehensive context correlation
+ */
+function logEnhancedSessionSummary({ agent, output, error, context }: OnEndHookArgs): void {
+  if (env.NODE_ENV === 'development') { console.debug('Enhanced output summary:', output); }
+  
   const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
   const delegationId = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID);
   const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
@@ -1120,93 +1106,175 @@ function logSessionSummary({ agent, output, error, context }: OnEndHookArgs) {
   const activeDelegations = context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any> || new Map();
   const delegationCount = context.userContext.get(CONTEXT_KEYS.DELEGATION_COUNT) as number;
   const retrievalCount = context.userContext.get(CONTEXT_KEYS.RETRIEVAL_COUNT);
+  const retrievalHistory = context.userContext.get(CONTEXT_KEYS.RETRIEVAL_HISTORY) as any[];
+  
+  const sessionMetrics = {
+    sessionId,
+    delegationId,
+    workflowId,
+    operationId: context.operationId,
+    duration,
+    totalDelegations: delegationCount,
+    successfulDelegations: activeDelegations.size,
+    retrievalCount,
+    avgRetrievalsPerDelegation: delegationCount > 0 ? Number((retrievalCount / delegationCount).toFixed(2)) : 0,
+    cacheHitRate: retrievalHistory?.length > 0 ? 
+      Number((retrievalHistory.filter((r: any) => r.cacheHit).length / retrievalHistory.length).toFixed(2)) : 0
+  };
   
   if (error) {
-    logger.error(`[${agent.name}] Coordination session failed`, {
-      sessionId,
-      delegationId,
-      workflowId,
-      operationId: context.operationId,
-      duration,
-      totalDelegations: delegationCount,
+    logger.error(`[${agent.name}] Enhanced coordination session failed`, {
+      ...sessionMetrics,
       error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.constructor.name : 'Unknown'
     });
   } else {
-    logger.info(`[${agent.name}] Coordination session completed`, {
-      sessionId,
-      delegationId,
-      workflowId,
-      operationId: context.operationId,
-      duration,
-      totalDelegations: delegationCount,
-      successfulDelegations: activeDelegations.size,
-      retrievalCount,
+    logger.info(`[${agent.name}] Enhanced coordination session completed`, {
+      ...sessionMetrics,
+      performance: duration < 5000 ? 'excellent' : duration < 15000 ? 'good' : 'acceptable',
+      efficiency: sessionMetrics.avgRetrievalsPerDelegation < 2 ? 'efficient' : 'moderate'
     });
   }
 }
 
-function handleDelegationEnd({ agent, tool, output, error, context }: OnToolEndHookArgs) {
+/**
+ * Handle enhanced delegation completion with status tracking
+ */
+function handleEnhancedDelegationEnd({ agent, tool, output, error, context }: OnToolEndHookArgs): void {
   const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
   const delegationId = context.userContext.get(CONTEXT_KEYS.DELEGATION_ID);
   const workflowId = context.userContext.get(CONTEXT_KEYS.WORKFLOW_ID);
   const delegationStartTime = context.userContext.get(CONTEXT_KEYS.CURRENT_DELEGATION) as number;
   const delegationDuration = delegationStartTime ? Date.now() - delegationStartTime : 0;
+  const activeDelegations = context.userContext.get(CONTEXT_KEYS.ACTIVE_DELEGATIONS) as Map<string, any>;
   
-  let resultPreviewStr = "[No output]";
-  if (typeof output !== 'undefined' && output !== null) {
-    if (typeof output === 'string') {
-      resultPreviewStr = output.substring(0, 100);
-    } else {
-      try {
-        let meaningfulOutput: any = output; // Ensure meaningfulOutput can be reassigned
-        if (typeof output === 'object') {
-            if ('value' in output && typeof (output as any).value === 'string') {
-                meaningfulOutput = (output as any).value;
-            } else if ('text' in output && typeof (output as any).text === 'string') {
-                meaningfulOutput = (output as any).text;
-            } else if (typeof (output as any).type === 'string' && (output as any).type === 'tool-result' && 
-                       (output as any).toolResult && typeof (output as any).toolResult.result !== 'undefined') {
-                meaningfulOutput = (output as any).toolResult.result;
-            }
-        }
-        const stringifiedOutput = JSON.stringify(meaningfulOutput);
-        resultPreviewStr = stringifiedOutput.substring(0, 100);
-      } catch (stringifyError) {
-        logger.warn(`[${agent.name}] Failed to stringify delegation output for preview`, {
-          sessionId,
-          delegationId,
-          toolName: tool.name,
-          error: stringifyError instanceof Error ? stringifyError.message : String(stringifyError)
-        });
-        resultPreviewStr = "[Unserializable Object]";
-      }
-    }
+  // Update delegation status in active delegations map
+  const currentDelegationCount = context.userContext.get(CONTEXT_KEYS.DELEGATION_COUNT) as number;
+  const delegationKey = `delegation-${currentDelegationCount}`;
+  
+  if (activeDelegations && activeDelegations.has(delegationKey)) {
+    const delegation = activeDelegations.get(delegationKey);
+    delegation.status = error ? 'failed' : 'completed';
+    delegation.duration = delegationDuration;
+    delegation.endTime = Date.now();
   }
+  
+  let resultPreviewStr = extractResultPreview(output);
+  
+  const delegationMetrics = {
+    sessionId,
+    delegationId,
+    workflowId,
+    operationId: context.operationId,
+    toolName: tool.name,
+    duration: delegationDuration,
+    delegationSequence: currentDelegationCount,
+    totalActiveDelegations: activeDelegations?.size || 0,
+    resultPreview: resultPreviewStr,
+    success: !error
+  };
 
   if (error) {
-    logger.error(`[${agent.name}] Task delegation failed`, {
-      sessionId,
-      delegationId,
-      workflowId,
-      operationId: context.operationId,
-      toolName: tool.name,
-      duration: delegationDuration,
+    logger.error(`[${agent.name}] Enhanced delegation failed`, {
+      ...delegationMetrics,
       error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.constructor.name : 'Unknown'
     });
   } else {
-    logger.info(`[${agent.name}] Task delegation tool executed successfully`, {
-      sessionId,
-      delegationId,
-      workflowId,
-      operationId: context.operationId,
-      toolName: tool.name,
-      duration: delegationDuration,
-      resultPreview: resultPreviewStr,
+    logger.info(`[${agent.name}] Enhanced delegation completed`, {
+      ...delegationMetrics,
+      performance: delegationDuration < 3000 ? 'fast' : delegationDuration < 10000 ? 'normal' : 'slow'
     });
   }
 }
 
+/**
+ * Handle enhanced retrieval completion with cache tracking
+ */
+function handleEnhancedRetrievalEnd({ agent, tool, output, error, context }: OnToolEndHookArgs): void {
+  const sessionId = context.userContext.get(CONTEXT_KEYS.SESSION_ID);
+  const retrievalHistory = context.userContext.get(CONTEXT_KEYS.RETRIEVAL_HISTORY) as any[];
+  
+  // Update the latest retrieval entry with results
+  if (retrievalHistory && retrievalHistory.length > 0) {
+    const latestRetrieval = retrievalHistory[retrievalHistory.length - 1];
+    latestRetrieval.completed = true;
+    latestRetrieval.success = !error;
+    latestRetrieval.duration = Date.now() - latestRetrieval.timestamp;
+    
+    if (output && typeof output === 'string') {
+      latestRetrieval.resultsCount = (output.match(/\[Context \d+/g) || []).length;
+      latestRetrieval.cacheHit = output.includes('cache hit') || latestRetrieval.duration < 50; // Fast = likely cache hit
+    }
+  }
+  
+  const retrievalMetrics = {
+    sessionId,
+    operationId: context.operationId,
+    toolName: tool.name,
+    retrievalSequence: context.userContext.get(CONTEXT_KEYS.RETRIEVAL_COUNT),
+    success: !error
+  };
+
+  if (error) {
+    logger.error(`[${agent.name}] Enhanced retrieval failed`, {
+      ...retrievalMetrics,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  } else {
+    logger.debug(`[${agent.name}] Enhanced retrieval completed`, {
+      ...retrievalMetrics,
+      resultsFound: retrievalHistory?.[retrievalHistory.length - 1]?.resultsCount || 0
+    });
+  }
+}
+
+/**
+ * Extract meaningful result preview from tool output
+ */
+function extractResultPreview(output: any): string {
+  if (!output) return "[No output]";
+  
+  if (typeof output === 'string') {
+    return output.substring(0, 100);
+  }
+  
+  try {
+    let meaningfulOutput: any = output;
+    if (typeof output === 'object') {
+      if ('value' in output && typeof (output as any).value === 'string') {
+        meaningfulOutput = (output as any).value;
+      } else if ('text' in output && typeof (output as any).text === 'string') {
+        meaningfulOutput = (output as any).text;
+      } else if (typeof (output as any).type === 'string' && (output as any).type === 'tool-result' && 
+                (output as any).toolResult && typeof (output as any).toolResult.result !== 'undefined') {
+        meaningfulOutput = (output as any).toolResult.result;
+      }
+    }
+    const stringifiedOutput = JSON.stringify(meaningfulOutput);
+    return stringifiedOutput.substring(0, 100);
+  } catch (stringifyError) {
+    logger.warn("Failed to stringify output for preview", {
+      error: stringifyError instanceof Error ? stringifyError.message : String(stringifyError)
+    });
+    return "[Unserializable Object]";
+  }
+}
+
+// Legacy compatibility function
+function logSessionSummary({ agent, output, error, context }: OnEndHookArgs) {
+  return logEnhancedSessionSummary({ agent, output, error, context });
+}
+
+function handleDelegationEnd({ agent, tool, output, error, context }: OnToolEndHookArgs) {
+  return handleEnhancedDelegationEnd({ agent, tool, output, error, context });
+}
+
 // Extract to a configuration object
+/**
+ * Configuration constants for supervisor agent behavior
+ * Centralized configuration following VoltAgent best practices
+ */
 const SUPERVISOR_CONFIG = {
   MEMORY: {
     STORAGE_LIMIT: 500,

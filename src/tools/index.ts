@@ -121,8 +121,6 @@ export {
   deleteRepositoryTool,
   listRepositoryHooksTool,
   createRepositoryHookTool,
-  getUserProfileTool,
-  listOrgMembersTool,
 } from "./githubTool.js";
 
 // #endregion
@@ -216,9 +214,7 @@ import {
   createRepositoryTool,
   deleteRepositoryTool,
   listRepositoryHooksTool,
-  createRepositoryHookTool,
-  getUserProfileTool,
-  listOrgMembersTool,
+  createRepositoryHookTool
 } from "./githubTool.js";
 import {
   runIsolatedCodeTool,
@@ -344,8 +340,6 @@ export const allTools = [
   deleteRepositoryTool,
   listRepositoryHooksTool,
   createRepositoryHookTool,
-  getUserProfileTool,
-  listOrgMembersTool,
   
   // Debugging
   runIsolatedCodeTool,
@@ -392,6 +386,7 @@ export const toolCategories = {
   system: [systemInfoTool],
   web: [webSearchTool, extractTextTool, extractLinksTool, extractMetadataTool, extractTablesTool, extractJsonLdTool, secureWebProcessorTool, webScrapingManagerTool, webContentValidatorTool],
   git: [gitStatusTool, standardGitAddTool, standardGitCommitTool, standardGitPushTool, standardGitPullTool, standardGitBranchTool, gitLogTool, gitDiffTool, standardGitMergeTool, gitResetTool, gitTool, enhancedGitStatusTool, secureGitScriptTool, gitRepositoryAnalysisTool, gitAddTool, gitCommitTool, gitPushTool, gitPullTool, gitBranchTool, gitMergeTool, gitResetTool, gitCloneTool],
+  github: [fetchRepoStarsTool, fetchRepoContributorsTool, getFileContentTool, listRepositoryContentsTool, listPullRequestsTool, getPullRequestDetailsTool, createPullRequestTool, mergePullRequestTool, commentOnPullRequestTool, listPullRequestFilesTool, createRepositoryTool, deleteRepositoryTool, listRepositoryHooksTool, createRepositoryHookTool],
   coding: [sandboxedCodeExecutorTool, readFileTool, writeFileTool, deleteFileTool, listDirectoryTool, createDirectoryTool, statTool, moveTool, copyTool, replaceLineInFileTool],
 } as const;
 
