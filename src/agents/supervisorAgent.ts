@@ -593,8 +593,6 @@ export const createSupervisorAgent = async () => {
         fetchRepoContributorsTool,
       ],
       subAgents: [
-        workers.calculator,
-        workers.datetime,
         workers.systemInfo,
         workers.fileOps,
         workers.git,
@@ -756,48 +754,6 @@ export const createWorkerAgents = async () => {
   logger.info("Creating specialized worker agents");
 
   try {
-    // Calculator worker agent
-    const calculatorWorker = new Agent({
-      name: "CalculatorAgent",
-      purpose: "Performs mathematical calculations, formulas, and statistical analysis.",
-      instructions: workerPrompts.generate("calculator")(),
-      llm: new VercelAIProvider(),
-      model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {
-        google: {
-          thinkingConfig: {
-            thinkingBudget: 0,
-            includeThoughts: false,
-          },
-          responseModalities: ["TEXT", "IMAGE"],
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
-      tools: [calculatorTool, statisticsAnalysisTool],
-      memory: createWorkerMemory("calculator"),
-      hooks: createWorkerHooks("calculator"),
-    });
-
-    // DateTime worker agent
-    const dateTimeWorker = new Agent({
-      name: "DateTimeAgent", 
-      purpose: "Handles date/time operations, formatting, scheduling, and timezone conversions.",
-      instructions: workerPrompts.generate("datetime")(),
-      llm: new VercelAIProvider(),
-      model: google('gemini-2.5-flash-preview-05-20'),
-      providerOptions: {
-        google: {
-          thinkingConfig: {
-            thinkingBudget: 0,
-            includeThoughts: false,
-          },
-          responseModalities: ["TEXT", "IMAGE"],
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
-      tools: [dateTimeTool],
-      memory: createWorkerMemory("datetime"),
-      hooks: createWorkerHooks("datetime"),
-    });
-
     // System Info worker agent
     const systemInfoWorker = new Agent({
       name: "SystemInfoAgent",
@@ -814,7 +770,7 @@ export const createWorkerAgents = async () => {
           responseModalities: ["TEXT", "IMAGE"],
         } satisfies GoogleGenerativeAIProviderOptions,
       },
-      tools: [systemInfoTool],
+      tools: [systemInfoTool, dateTimeTool, calculatorTool, statisticsAnalysisTool],
       memory: createWorkerMemory("systeminfo"),
       hooks: createWorkerHooks("systeminfo"),
     });
@@ -1122,8 +1078,6 @@ export const createWorkerAgents = async () => {
     });
 
     const workers = {
-      calculator: calculatorWorker,
-      datetime: dateTimeWorker,
       systemInfo: systemInfoWorker,
       fileOps: fileOpsWorker,
       git: gitWorker,
@@ -1259,13 +1213,13 @@ const SUPERVISOR_CONFIG = {
     WORKER_STORAGE_LIMIT: 200,
   },
   RETRIEVER: {
-    MAX_RESULTS: 15,
+    MAX_RESULTS: 10,
     DEFAULT_MIN_SCORE: 1,
     STORE_MAX_SIZE: 1000,
     SEARCH_CACHE_SIZE: 200,
   },
   MODELS: {
-    THINKING_BUDGET: 512,
+    THINKING_BUDGET: 0, // Default thinking budget for supervisor agent
     WORKER_THINKING_BUDGET: 0,
   },
   LOGGING: {

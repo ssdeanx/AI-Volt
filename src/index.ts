@@ -6,15 +6,11 @@
  */
 
 import { VoltAgent, VoltAgentExporter } from "@voltagent/core";
-
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { createAIVoltAgent, createSupervisorAgent, createWorkerAgents } from "./agents/index.js";
-// Removed: import { allTools, toolCategories } from "./tools/index.js"; 
-// Assuming toolCategories are no longer needed here as agent creation functions handle tools.
 import { logger } from "./config/logger.js";
 import { env } from "./config/environment.js";
-
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
 
 /**
@@ -41,19 +37,14 @@ async function startAIVolt(): Promise<void> {
       agents: {
         // Main agent with all capabilities
         "ai-volt": aiVoltAgent,
-
         // Supervisor for coordinating tasks
         "supervisor": supervisorAgent,
-//        "fact-checker": factCheckerAgent,
         // Specialized worker agents
-        "calculator": workerAgents.calculator,
-        "datetime": workerAgents.datetime,
         "system-info": workerAgents.systemInfo,
         "file-ops": workerAgents.fileOps,
         "git-ops": workerAgents.git,
         "browser-ops": workerAgents.browser,
         "coding-ops": workerAgents.coding,
-//        "prompt-manager": workerAgents.promptManager,
         "debug": workerAgents.debug,
         "research": workerAgents.research,
         "knowledge-base": workerAgents.knowledgeBase, 
@@ -74,7 +65,6 @@ async function startAIVolt(): Promise<void> {
     });
     
     sdk.start();
-    // Fix: workerAgentKeysForLog is not defined, so use Object.keys(workerAgents)
     const workerAgentKeysForLog = Object.keys(workerAgents);
     // Instead of Object.keys(voltAgent.agents), use the keys we passed in
     const registeredAgentCount = 2 + workerAgentKeysForLog.length; // ai-volt + supervisor + workers
