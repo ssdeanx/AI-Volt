@@ -351,51 +351,37 @@ This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE
 %%{flowchart: {nodeSpacing: 50, rankSpacing: 50}}%%
 %%{flowchart: {defaultStyle: {fill: '#f9f9f9', stroke: '#333', 'stroke-width': 1.5}}}%%
 graph TD
-    %% Define the main components of the AI Volt architecture
-    7402["User<br>External Actor"]
-    subgraph 7390["External Systems"]
-        7397["AI APIs<br>Google, Vercel, etc."]
-        7398["Code Repository APIs<br>GitHub, etc."]
-        7399["Data Stores<br>LibSQL, etc."]
-        7400["Containerization APIs<br>Docker, etc."]
-        7401["Web Browser Interaction<br>Playwright/Chromium"]
+    Node[style="fill:#f9f9f9;stroke:#333;stroke-width:1.5"]
+    %% Nodes at the top level
+    13230["User<br>External Actor"] -->|Initiates Task| 13220["Application Entry<br>TypeScript"]
+    subgraph 13218["External Systems"]
+        13225["AI Platform APIs<br>Google Generative AI, etc."]
+        13226["Cloud Provider APIs<br>Docker API, etc."]
+        13227["VCS Platform APIs<br>GitHub API, etc."]
+        13228["Web Data Sources<br>Websites, HTTP APIs"]
+        13229["Knowledge Bases<br>Vector DBs, Files, etc."]
     end
-    subgraph 7391["AI Volt Application<br>Node.js / TypeScript"]
-        7392["Application Entry<br>TypeScript"]
-        7393["Agent Core<br>TypeScript"]
-        7394["Tooling System<br>TypeScript"]
-        7395["Prompt Management<br>TypeScript"]
-        7396["Configuration &amp; Logging<br>TypeScript"]
+    %% Nodes at the second level
+    subgraph 13219["AI Volt Application<br>Node.js / TypeScript"]
+        13220["Application Entry<br>TypeScript"]
+        13221["Agent Orchestration<br>TypeScript"]
+        13222["Prompt Management<br>TypeScript"]
+        13223["Configuration &amp; Logging<br>TypeScript"]
+        13224["Tool Suite<br>TypeScript"]
         %% Edges at this level (grouped by source)
-        7392["Application Entry<br>TypeScript"] -->|initializes| 7393["Agent Core<br>TypeScript"]
-        7392["Application Entry<br>TypeScript"] -->|loads| 7396["Configuration &amp; Logging<br>TypeScript"]
-        7393["Agent Core<br>TypeScript"] -->|uses| 7394["Tooling System<br>TypeScript"]
-        7393["Agent Core<br>TypeScript"] -->|loads prompts from| 7395["Prompt Management<br>TypeScript"]
-        7393["Agent Core<br>TypeScript"] -->|uses| 7396["Configuration &amp; Logging<br>TypeScript"]
-        7394["Tooling System<br>TypeScript"] -->|uses| 7396["Configuration &amp; Logging<br>TypeScript"]
+        13220["Application Entry<br>TypeScript"] -->|Starts| 13221["Agent Orchestration<br>TypeScript"]
+        13220["Application Entry<br>TypeScript"] -->|Initializes| 13223["Configuration &amp; Logging<br>TypeScript"]
+        13221["Agent Orchestration<br>TypeScript"] -->|Retrieves Prompts From| 13222["Prompt Management<br>TypeScript"]
+        13221["Agent Orchestration<br>TypeScript"] -->|Uses| 13223["Configuration &amp; Logging<br>TypeScript"]
+        13221["Agent Orchestration<br>TypeScript"] -->|Delegates Tasks To| 13224["Tool Suite<br>TypeScript"]
     end
-    %% Edges at this level (grouped by source)
-    %% Connect the user to the application entry point
-    7392["Application Entry<br>TypeScript"] -->|receives input from| 7402["User<br>External Actor"]
-    %% Connect the application entry point to the external systems
-    7392["Application Entry<br>TypeScript"] -->|invokes| 7397["AI APIs<br>Google, Vercel, etc."]
-    7392["Application Entry<br>TypeScript"] -->|interacts with| 7398["Code Repository APIs<br>GitHub, etc."]
-    7392["Application Entry<br>TypeScript"] -->|stores data in| 7399["Data Stores<br>LibSQL, etc."]
-    7392["Application Entry<br>TypeScript"] -->|manages containers via| 7400["Containerization APIs<br>Docker, etc."]
-    7392["Application Entry<br>TypeScript"] -->|automates web tasks with| 7401["Web Browser Interaction<br>Playwright/Chromium"]
-    %% Connect the agent core to the external systems
-    7393["Agent Core<br>TypeScript"] -->|calls| 7397["AI APIs<br>Google, Vercel, etc."]
-    7393["Agent Core<br>TypeScript"] -->|uses memory via| 7399["Data Stores<br>LibSQL, etc."]
-    7394["Tooling System<br>TypeScript"] -->|interacts with| 7398["Code Repository APIs<br>GitHub, etc."]
-    7394["Tooling System<br>TypeScript"] -->|manages| 7400["Containerization APIs<br>Docker, etc."]
-    7394["Tooling System<br>TypeScript"] -->|automates| 7401["Web Browser Interaction<br>Playwright/Chromium"]
-    %% Connect the user to the application entry point
-    7402["User<br>External Actor"] -->|invokes| 7392["Application Entry<br>TypeScript"]
-    7393["Agent Core<br>TypeScript"] -->|calls| 7397["AI APIs<br>Google, Vercel, etc."]
-    7393["Agent Core<br>TypeScript"] -->|uses memory via| 7399["Data Stores<br>LibSQL, etc."]
-    7394["Tooling System<br>TypeScript"] -->|interacts with| 7398["Code Repository APIs<br>GitHub, etc."]
-    7394["Tooling System<br>TypeScript"] -->|manages| 7400["Containerization APIs<br>Docker, etc."]
-    7394["Tooling System<br>TypeScript"] -->|automates| 7401["Web Browser Interaction<br>Playwright/Chromium"]
+    %% Nodes at the third level
+    13230["User<br>External Actor"] -->|Initiates Task| 13220["Application Entry<br>TypeScript"]
+    13221["Agent Orchestration<br>TypeScript"] -->|Calls| 13225["AI Platform APIs<br>Google Generative AI, etc."]
+    13224["Tool Suite<br>TypeScript"] -->|Manages| 13226["Cloud Provider APIs<br>Docker API, etc."]
+    13224["Tool Suite<br>TypeScript"] -->|Accesses| 13227["VCS Platform APIs<br>GitHub API, etc."]
+    13224["Tool Suite<br>TypeScript"] -->|Interacts With| 13228["Web Data Sources<br>Websites, HTTP APIs"]
+    13224["Tool Suite<br>TypeScript"] -->|Queries/Updates| 13229["Knowledge Bases<br>Vector DBs, Files, etc."]
 ```
 
 ---
