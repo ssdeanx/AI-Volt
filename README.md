@@ -346,7 +346,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE
 %%author ssd
 %%date 2025-06-09
 %%style
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#4CAF50', 'edgeLabelBackground':'#0f0f0f0', 'tertiaryColor': '#f0f0f0'}}}%%
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#4CAF50', 'edgeLabelBackground':'#0f0f0f', 'tertiaryColor': '#f0f0f0'}}}%%
 %%{flowchart: {curve: 'smooth'}}%%
 %%{flowchart: {nodeSpacing: 50, rankSpacing: 50}}%%
 %%{flowchart: {defaultStyle: {fill: '#f9f9f9', stroke: '#333', 'stroke-width': 1.5}}}%%
