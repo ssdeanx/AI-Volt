@@ -195,7 +195,52 @@ const createSupervisorHooks = () => createHooks({
 
   },
   onEnd: async ({ agent, output, error, context }: OnEndHookArgs) => {
+    // --- Cost Tracking ---
+    let llmUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined = undefined;
+    // Try symbol-based key (if defined in CONTEXT_KEYS)
+    if (Object.prototype.hasOwnProperty.call(CONTEXT_KEYS, 'LLM_USAGE')) {
+      llmUsage = context.userContext.get((CONTEXT_KEYS as any).LLM_USAGE);
+    } else {
+      // fallback: try string key or legacy context
+      llmUsage = context.userContext.get('llmUsage');
+    }
+    if (!llmUsage && (context as any).llmUsage) {
+      llmUsage = (context as any).llmUsage;
+    }
+    if (llmUsage) {
+      const { promptTokens, completionTokens } = llmUsage;
+      // Gemini 2.5 Flash Preview (Paid Tier, Non-Thinking)
+      const inputCost = (promptTokens / 1_000_000) * 0.15;
+      const outputCost = (completionTokens / 1_000_000) * 0.60;
+      const totalCost = inputCost + outputCost;
+      const taskId = context.userContext.get(CONTEXT_KEYS.TASK_ID) || context.userContext.get(CONTEXT_KEYS.SESSION_ID) || context.operationId;
+      const agentType = context.userContext.get(CONTEXT_KEYS.AGENT_TYPE) || (agent as any).agentType || agent.name;
+      logger.info(`[${agent.name}] LLM usage/cost tracked`, {
+        taskId,
+        agentType,
+        promptTokens,
+        completionTokens,
+        inputCost,
+        outputCost,
+        totalCost,
+        operationId: context.operationId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    // Call session summary logging
     logSessionSummary({ agent, output, error, context });
+    // Error/final logging
+    if (error) {
+      logger.error(`[${agent.name}] Task failed`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        operationId: context.operationId,
+      });
+    } else {
+      logger.info(`[${agent.name}] Task completed`, {
+        operationId: context.operationId,
+      });
+    }
   },
 
   onToolStart: async ({ agent, tool, context }: OnToolStartHookArgs) => {

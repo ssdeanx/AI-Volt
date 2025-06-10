@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/todo-tag */
 /* eslint-disable sonarjs/different-types-comparison */
 // Generated on 2025-06-08
 import {
@@ -12,7 +13,6 @@ import {
   type Toolkit, 
   type Tool,
 } from "@voltagent/core";
-import LibSQLVector from "@voltagent/core"
 import { VercelAIProvider } from "@voltagent/vercel-ai";
 import { google } from "@ai-sdk/google";
 import { generateId } from "ai";
