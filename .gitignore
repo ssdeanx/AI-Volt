@@ -13,3 +13,5 @@ data
 weaviate_data/*
 weaviate_data/
 weaviate_data
+api.json
+.aiconfig.json
