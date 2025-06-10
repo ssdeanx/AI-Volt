@@ -346,12 +346,11 @@ This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE
 %%author ssd
 %%date 2025-06-09
 %%style
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#4CAF50', 'edgeLabelBackground':'#ffffff', 'tertiaryColor': '#f0f0f0'}}}%%
-%%{flowchart: {curve: 'linear'}}%%
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#4CAF50', 'edgeLabelBackground':'#0f0f0f0', 'tertiaryColor': '#f0f0f0'}}}%%
+%%{flowchart: {curve: 'smooth'}}%%
 %%{flowchart: {nodeSpacing: 50, rankSpacing: 50}}%%
 %%{flowchart: {defaultStyle: {fill: '#f9f9f9', stroke: '#333', 'stroke-width': 1.5}}}%%
 graph TD
-    Node[style="fill:#f9f9f9;stroke:#333;stroke-width:1.5"]
     %% Nodes at the top level
     13230["User<br>External Actor"] -->|Initiates Task| 13220["Application Entry<br>TypeScript"]
     subgraph 13218["External Systems"]
