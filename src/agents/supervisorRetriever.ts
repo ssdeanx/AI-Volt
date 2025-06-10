@@ -5,7 +5,7 @@
  * Generated on 2025-06-09
  */
 
-import { BaseRetriever, type BaseMessage } from "@voltagent/core";
+import { BaseRetriever, type BaseMessage, type RetrieverOptions } from "@voltagent/core";
 import { logger } from "../config/logger.js";
 import { generateId } from "ai";
 import QuickLRU from "quick-lru";
@@ -410,11 +410,10 @@ export class SupervisorRetriever extends BaseRetriever {
     if (!this.embedderReady) await this.initEmbedder();
     await this.contextStore.addChunkedChatContext(chatSessionId, content, chunkSize, async (t: string) => await this.getEmbedding(t), source, metadata);
   }
-
   /**
-   * Retrieve relevant context entries for the given input using semantic search.
-   */
-  async retrieve(input: string | BaseMessage[]): Promise<string> {
+    * Retrieve relevant context entries for the given input using semantic search.
+    */
+  async retrieve(input: string | BaseMessage[], _options: RetrieverOptions = {}): Promise<string> {
     const retrievalId = generateId();
     const startTime = Date.now();
     try {
@@ -459,8 +458,8 @@ export class SupervisorRetriever extends BaseRetriever {
   }
 
   /**
-   * Index a delegation result. Errors are caught and logged.
-   */
+    * Index a delegation result. Errors are caught and logged.
+    */
   addDelegationContext(result: {
     agentType: string;
     task: string;
@@ -507,8 +506,8 @@ export class SupervisorRetriever extends BaseRetriever {
   }
 
   /**
-   * Add workflow context
-   */
+    * Add workflow context
+    */
   addWorkflowContext(workflow: {
     description: string;
     steps: string[];
@@ -545,8 +544,8 @@ export class SupervisorRetriever extends BaseRetriever {
   }
 
   /**
-   * Add agent capability information
-   */
+    * Add agent capability information
+    */
   addCapabilityContext(capability: {
     agentType: string;
     capability: string;
@@ -586,15 +585,15 @@ export class SupervisorRetriever extends BaseRetriever {
   }
 
   /**
-   * Get retrieval statistics
-   */
+    * Get retrieval statistics
+    */
   getStats() {
     return this.contextStore.getStats();
   }
 
   /**
-   * Clean up old contexts older than maxAge (ms).
-   */
+    * Clean up old contexts older than maxAge (ms).
+    */
   cleanup(maxAge: number = 7 * 24 * 60 * 60 * 1000): number {
     try {
       const removed = this.contextStore.cleanup(maxAge);
@@ -609,8 +608,8 @@ export class SupervisorRetriever extends BaseRetriever {
   }
 
   /**
-   * Use a constant list for query-based agentType detection.
-   */
+    * Use a constant list for query-based agentType detection.
+    */
   private analyzeQueryForSearchOptions(query: string): {
     type?: string;
     agentType?: typeof AGENT_TYPES[number];
